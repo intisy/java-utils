@@ -6,7 +6,7 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 
 public class ConnectionUtils {
-    public static String curl2(HttpURLConnection connection, String token, String payload) {
+    public static String curl(HttpURLConnection connection, String token, String payload) {
         StringBuilder curl = new StringBuilder();
         if (token != null)
             curl.append("curl -X ").append(connection.getRequestMethod()).append(" -H \"Authorization: Bearer ").append(token).append("\"");
