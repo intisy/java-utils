@@ -4,6 +4,7 @@ import java.awt.*;
 import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.StringSelection;
 
+@SuppressWarnings("unused")
 public class ClipboardUtils {
     /**
  * Copies the given text to the system clipboard.
