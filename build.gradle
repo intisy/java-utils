@@ -1,0 +1,23 @@
+plugins {
+    id 'com.github.johnrengelman.shadow' version '8.1.1'
+    id 'org.openjfx.javafxplugin' version '0.0.13'
+    id 'io.github.intisy.github-gradle' version '1.1.6'
+    id 'io.github.intisy.online-gradle' version '1.3'
+}
+
+online {
+    urls = [
+            'https://raw.githubusercontent.com/intisy/gradle-snippets/main/base.gradle',
+            'https://raw.githubusercontent.com/intisy/gradle-snippets/main/repositories.gradle',
+            'https://raw.githubusercontent.com/intisy/gradle-snippets/main/java_1_8.gradle',
+            'https://raw.githubusercontent.com/intisy/gradle-snippets/main/shadowJar.gradle',
+            'https://raw.githubusercontent.com/intisy/gradle-snippets/main/wrapper.gradle',
+            'https://raw.githubusercontent.com/intisy/gradle-snippets/main/jar.gradle'
+    ]
+}
+
+dependencies {
+    githubImplementation 'Blizzity:SimpleVariables:1.7.1'
+    githubImplementation 'Blizzity:SimpleLogger:1.10.26'
+    implementation 'org.kohsuke:github-api:1.99'
+}
