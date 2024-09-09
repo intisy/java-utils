@@ -13,5 +13,6 @@ online {
 }
 
 dependencies {
+    githubImplementation 'intisy:simple-logger:1.14'
     implementation "org.kohsuke:github-api:1.99"
 }
