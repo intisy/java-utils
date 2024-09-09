@@ -1,7 +1,7 @@
 package io.github.intisy.utils.custom;
 
-import com.github.WildePizza.EmptyLogger;
-import com.github.WildePizza.SimpleLogger;
+import io.github.intisy.simple.logger.EmptyLogger;
+import io.github.intisy.simple.logger.SimpleLogger;
 
 import java.sql.*;
 import java.util.ArrayList;
