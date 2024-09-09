@@ -1,15 +1,29 @@
 package io.github.intisy.utils.utils;
 
+import io.github.intisy.simple.logger.StaticLogger;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.nio.charset.Charset;
 import java.nio.file.AccessDeniedException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.List;
 
 @SuppressWarnings({"unused", "ResultOfMethodCallIgnored"})
 public class FileUtils {
+    public static List<String> readAllLines(Path directory, Charset charset) {
+        while (true) {
+            try {
+                return Files.readAllLines(directory, charset);
+            } catch (IOException e) {
+                StaticLogger.warning("Exception while reading file, waiting for problem to resolve...");
+            }
+        }
+    }
     public static void delete(File file) {
         if (file.exists())
             if (!file.delete())
