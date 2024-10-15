@@ -4,6 +4,7 @@ import java.awt.*;
 import java.io.File;
 import java.io.IOException;
 
+@SuppressWarnings("unused")
 public class FontUtils {
     public static Font loadFont(String fontPath, int fontSize) {
         try {

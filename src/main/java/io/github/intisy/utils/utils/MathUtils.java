@@ -1,8 +1,6 @@
 package io.github.intisy.utils.utils;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
+@SuppressWarnings("unused")
 public class MathUtils {
     public static double[] multiplyArray(double[] array, int multiplier) {
         double[] newArray = array;
