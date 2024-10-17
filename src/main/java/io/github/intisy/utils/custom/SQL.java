@@ -8,16 +8,16 @@ import java.util.ArrayList;
 import java.util.List;
 
 @SuppressWarnings("unused")
-public class Database {
+public class SQL {
     String url;
     String username;
     String password;
     SimpleLogger logger = new EmptyLogger();
     Connection connection;
-    public Database(String url) {
+    public SQL(String url) {
         setUrl(url);
     }
-    public Database(String url, String username, String password) {
+    public SQL(String url, String username, String password) {
         overwriteConnection(url, username, password);
     }
     private Connection getConnection() {
