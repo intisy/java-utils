@@ -59,7 +59,7 @@ public class SQL {
             }
             sql.append(")");
             executeStatement(statement, sql.toString());
-            logger.note("Table created successfully.");
+            logger.debug("Table created successfully.");
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
@@ -71,13 +71,13 @@ public class SQL {
              Statement statement = connection.createStatement()) {
 
             statement.execute(sql);
-            logger.note("Table '" + tableName + "' deleted successfully.");
+            logger.debug("Table '" + tableName + "' deleted successfully.");
         } catch (SQLException e) {
             logger.exception(e);
         }
     }
     public void executeStatement(Statement statement, String sql) {
-        logger.note("Executing SQL Statement: " + sql);
+        logger.debug("Executing SQL Statement: " + sql);
         try {
             statement.execute(sql);
         } catch (Exception ignored) {}
@@ -98,22 +98,22 @@ public class SQL {
 
             // Print column names
             for (int i = 1; i <= columnCount; i++) {
-                logger.note(metaData.getColumnName(i) + "\t");
+                logger.debug(metaData.getColumnName(i) + "\t");
             }
-            logger.note("");
+            logger.debug("");
 
             // Print table data
             while (resultSet.next()) {
                 for (int i = 1; i <= columnCount; i++) {
-                    logger.note(resultSet.getString(i) + "\t");
+                    logger.debug(resultSet.getString(i) + "\t");
                 }
-                logger.note("");
+                logger.debug("");
             }
         } catch (SQLException e) {
             logger.exception(e);
         }
     }
-    public List<String> quickSelectData(String name, String select, String... args) {
+    public List<String> selectData(String name, String select, String... args) {
         StringBuilder sql = new StringBuilder("SELECT " + select + " FROM " + name + " WHERE ");
         for (int i = 0; i < args.length; i += 2) {
             sql.append(args[i]).append(" = ?");
@@ -121,7 +121,7 @@ public class SQL {
                 sql.append(" AND ");
             }
         }
-        logger.note("Executing SQL Statement: " + sql);
+        logger.debug("Executing SQL Statement: " + sql);
         List<String> result = new ArrayList<>();
         try (Connection connection = getConnection()) {
             PreparedStatement statement = prepareStatement(connection, sql.toString());
@@ -146,32 +146,6 @@ public class SQL {
             throw new RuntimeException(e);
         }
     }
-    public List<String> selectData(String name, String select, String... args) {
-        StringBuilder sql = new StringBuilder("SELECT " + select + " FROM " + name + " WHERE ");
-        for (int i = 0; i < args.length; i+=2) {
-            sql.append(args[i]).append(" = ?");
-            if (i < args.length - 2) {
-                sql.append(" AND ");
-            }
-        }
-        List<String> result = new ArrayList<>();
-        logger.note("Selecting SQL Statement: " + sql);
-        try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(
-                     sql.toString())) {
-            for (int i = 2; i <= args.length; i+=2) {
-                statement.setString(i/2, args[i-1]);
-            }
-            ResultSet resultSet = statement.executeQuery();
-
-            while (resultSet.next()) {
-                result.add(resultSet.getString(select));
-            }
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
-        }
-        return result;
-    }
     public void insertData(String name, String... args) {
         StringBuilder sql = new StringBuilder("INSERT INTO " + name + " (");
         for (int i = 0; i < args.length; i+=2) {
@@ -188,7 +162,7 @@ public class SQL {
             }
         }
         sql.append(")");
-        logger.note("Executing SQL Statement: " + sql);
+        logger.debug("Executing SQL Statement: " + sql);
         try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(
                      sql.toString())) {
@@ -197,7 +171,7 @@ public class SQL {
             }
             int rowsInserted = statement.executeUpdate();
             if (rowsInserted > 0) {
-                logger.note("A new " + name.substring(0, name.length()-1) + " was inserted successfully!");
+                logger.debug("A new " + name.substring(0, name.length()-1) + " was inserted successfully!");
             }
         } catch (SQLException e) {
             throw new RuntimeException(e);
@@ -213,7 +187,7 @@ public class SQL {
         }
         sql.append(" WHERE ").append(primaryKey).append(" = ?");
 
-        logger.note("Executing SQL Statement: " + sql);
+        logger.debug("Executing SQL Statement: " + sql);
         try (Connection connection = getConnection();
              PreparedStatement statement = connection.prepareStatement(sql.toString())) {
             int paramIndex = 1;
@@ -224,9 +198,9 @@ public class SQL {
 
             int rowsUpdated = statement.executeUpdate();
             if (rowsUpdated > 0) {
-                logger.note("Data in " + name + " table updated successfully!");
+                logger.debug("Data in " + name + " table updated successfully!");
             } else {
-                logger.note("No rows were updated.");
+                logger.debug("No rows were updated.");
             }
         } catch (SQLException e) {
             throw new RuntimeException(e);
