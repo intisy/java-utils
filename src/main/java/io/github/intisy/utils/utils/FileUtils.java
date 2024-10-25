@@ -93,7 +93,7 @@ public class FileUtils {
         URL resourceUrl = resourceClass.getClassLoader().getResource(path);
         assert resourceUrl != null;
         String[] split = path.split("\\.");
-        String suffix = path.split("\\.")[split.length - 1];
+        String suffix = "." + path.split("\\.")[split.length - 1];
         String prefix = "temp-resource";
         try {
             File tempFile = File.createTempFile(prefix, suffix);
