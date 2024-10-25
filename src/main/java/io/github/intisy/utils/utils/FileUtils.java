@@ -88,13 +88,13 @@ public class FileUtils {
             throw new RuntimeException(e);
         }
     }
-    
+
     public static File resourceToFile(Class<?> resourceClass, String path) {
         URL resourceUrl = resourceClass.getClassLoader().getResource(path);
         assert resourceUrl != null;
         String[] split = path.split("\\.");
         String suffix = path.split("\\.")[split.length - 1];
-        String prefix = path.substring(0, suffix.length() - 1);
+        String prefix = "temp-resource";
         try {
             File tempFile = File.createTempFile(prefix, suffix);
             try (OutputStream outputStream = Files.newOutputStream(tempFile.toPath())) {
