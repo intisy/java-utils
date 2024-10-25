@@ -2,10 +2,8 @@ package io.github.intisy.utils.utils;
 
 import io.github.intisy.simple.logger.StaticLogger;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
-import java.io.IOException;
+import java.io.*;
+import java.net.URL;
 import java.nio.charset.Charset;
 import java.nio.file.AccessDeniedException;
 import java.nio.file.Files;
@@ -90,6 +88,30 @@ public class FileUtils {
             throw new RuntimeException(e);
         }
     }
+    
+    public static File resourceToFile(Class<?> resourceClass, String path) {
+        URL resourceUrl = resourceClass.getClassLoader().getResource(path);
+        assert resourceUrl != null;
+        String[] split = path.split("\\.");
+        String suffix = path.split("\\.")[split.length - 1];
+        String prefix = path.substring(0, suffix.length() - 1);
+        try {
+            File tempFile = File.createTempFile(prefix, suffix);
+            try (OutputStream outputStream = Files.newOutputStream(tempFile.toPath())) {
+                byte[] buffer = new byte[1024];
+                int bytesRead;
+                try (InputStream stream = resourceUrl.openStream()) {
+                    while ((bytesRead = stream.read(buffer)) != -1) {
+                        outputStream.write(buffer, 0, bytesRead);
+                    }
+                }
+            }
+            return tempFile;
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     public static void deleteFolder(File folder) {
         // Check if the given File object represents a directory
         if (folder.isDirectory()) {
