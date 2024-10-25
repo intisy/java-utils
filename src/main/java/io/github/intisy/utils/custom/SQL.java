@@ -47,6 +47,43 @@ public class SQL {
         this.username = username;
     }
 
+    public void logEntireDatabase() throws SQLException {
+        DatabaseMetaData metaData = connection.getMetaData();
+        try (ResultSet tables = metaData.getTables(null, null, "%", new String[]{"TABLE"})) {
+            while (tables.next()) {
+                String tableName = tables.getString("TABLE_NAME");
+                System.out.println("\n=== Table: " + tableName + " ===");
+                List<String> columns = new ArrayList<>();
+                try (ResultSet cols = metaData.getColumns(null, null, tableName, null)) {
+                    while (cols.next()) {
+                        columns.add(cols.getString("COLUMN_NAME"));
+                    }
+                }
+                System.out.println(String.join(" | ", columns));
+                StringBuilder sb = new StringBuilder();
+                for (int i = 0; i < columns.size() * 20; i++) {
+                    sb.append("-");
+                }
+                System.out.println(sb);
+
+                // Query and print all rows
+                try (Statement stmt = connection.createStatement();
+                     ResultSet rs = stmt.executeQuery("SELECT * FROM " + tableName)) {
+
+                    while (rs.next()) {
+                        StringBuilder row = new StringBuilder();
+                        for (String column : columns) {
+                            if (row.length() > 0) row.append(" | ");
+                            String value = rs.getString(column);
+                            row.append(value == null ? "NULL" : value);
+                        }
+                        System.out.println(row);
+                    }
+                }
+            }
+        }
+    }
+
     public void createTable(String name, String... args) {
         try (Connection connection = getConnection();
              Statement statement = connection.createStatement()) {
