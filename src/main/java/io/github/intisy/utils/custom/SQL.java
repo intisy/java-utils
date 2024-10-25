@@ -9,17 +9,25 @@ import java.util.List;
 
 @SuppressWarnings("unused")
 public class SQL {
-    String url;
-    String username;
-    String password;
-    SimpleLogger logger = new EmptyLogger();
-    Connection connection;
+    private String url;
+    private String username;
+    private String password;
+    private SimpleLogger logger = new EmptyLogger();
+    private Connection connection;
     public SQL(String url) {
-        setUrl(url);
+        this(url, null, null);
     }
     public SQL(String url, String username, String password) {
-        overwriteConnection(url, username, password);
+        this.url = url;
+        this.username = username;
+        this.password = password;
+        this.connection = getConnection();
     }
+
+    public void setConnection(Connection connection) {
+        this.connection = connection;
+    }
+
     private Connection getConnection() {
         try {
             if (username != null && password != null)
@@ -29,11 +37,6 @@ public class SQL {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
-    }
-    public void overwriteConnection(String url, String username, String password) {
-        this.url = url;
-        this.username = username;
-        this.password = password;
     }
     public void setPassword(String PASSWORD) {
         this.password = PASSWORD;
@@ -52,21 +55,19 @@ public class SQL {
         try (ResultSet tables = metaData.getTables(null, null, "%", new String[]{"TABLE"})) {
             while (tables.next()) {
                 String tableName = tables.getString("TABLE_NAME");
-                System.out.println("\n=== Table: " + tableName + " ===");
+                logger.log("\n=== Table: " + tableName + " ===");
                 List<String> columns = new ArrayList<>();
                 try (ResultSet cols = metaData.getColumns(null, null, tableName, null)) {
                     while (cols.next()) {
                         columns.add(cols.getString("COLUMN_NAME"));
                     }
                 }
-                System.out.println(String.join(" | ", columns));
+                logger.log(String.join(" | ", columns));
                 StringBuilder sb = new StringBuilder();
                 for (int i = 0; i < columns.size() * 20; i++) {
                     sb.append("-");
                 }
-                System.out.println(sb);
-
-                // Query and print all rows
+                logger.log(sb);
                 try (Statement stmt = connection.createStatement();
                      ResultSet rs = stmt.executeQuery("SELECT * FROM " + tableName)) {
 
@@ -77,8 +78,10 @@ public class SQL {
                             String value = rs.getString(column);
                             row.append(value == null ? "NULL" : value);
                         }
-                        System.out.println(row);
+                        logger.log(row);
                     }
+                } catch (SQLException e) {
+                    throw new RuntimeException(e);
                 }
             }
         }
