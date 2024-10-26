@@ -2,6 +2,8 @@ package io.github.intisy.utils.custom;
 
 import io.github.intisy.simple.logger.EmptyLogger;
 import io.github.intisy.simple.logger.SimpleLogger;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 
 import java.sql.*;
 import java.util.ArrayList;
@@ -10,6 +12,7 @@ import java.util.List;
 
 @SuppressWarnings("unused")
 public class SQL implements AutoCloseable {
+    private static final Log log = LogFactory.getLog(SQL.class);
     private final String url;
     private final String username;
     private final String password;
@@ -297,11 +300,14 @@ public class SQL implements AutoCloseable {
             }
             index++;
         }
-        String title = "Table: " + tableName;
+        String title = " Table: " + tableName + " ";
         String divider = String.join("", Collections.nCopies(Math.max((lines.get(0).length() - title.length()) / 2, 0), "-"));
-        logger.log("\n" + divider + title + divider);
+        String combined = divider + title + divider;
+        combined += combined.length() < lines.get(0).length() ? "-" : "";
+        logger.log("\n" + combined);
         for (String line : lines)
             logger.log(line);
+        logger.log(String.join("", Collections.nCopies(lines.get(0).length(), "-")));
     }
 
     private Connection getConnection() throws SQLException {
