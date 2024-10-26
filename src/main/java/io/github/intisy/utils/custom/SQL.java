@@ -86,6 +86,19 @@ public class SQL implements AutoCloseable {
         }
     }
 
+    public void deleteTable(String tableName) {
+        String sql = "DROP TABLE IF EXISTS " + tableName;
+
+        try (Connection connection = getConnection();
+             Statement statement = connection.createStatement()) {
+
+            statement.execute(sql);
+            logger.debug("Table '" + tableName + "' deleted successfully.");
+        } catch (SQLException e) {
+            logger.exception(e);
+        }
+    }
+
     @Override
     public void close() {
         try {
