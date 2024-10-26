@@ -310,7 +310,7 @@ public class SQL implements AutoCloseable {
         logger.log("\n" + combined);
         for (String line : lines)
             logger.log(line);
-        logger.log(String.join("", Collections.nCopies(divider.length(), "-")));
+        logger.log(String.join("", Collections.nCopies(combined.length(), "-")));
     }
 
     private Connection getConnection() throws SQLException {
