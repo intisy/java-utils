@@ -7,8 +7,6 @@ import java.sql.*;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 @SuppressWarnings("unused")
 public class SQL implements AutoCloseable {
@@ -18,13 +16,10 @@ public class SQL implements AutoCloseable {
     private SimpleLogger logger;
     private final DatabaseType databaseType;
     private Connection connection;
-
-    private static final Map<String, String> CREATE_TABLE_TEMPLATES = new ConcurrentHashMap<>();
+    private static final List<Double<String, String>> CREATE_TABLE_TEMPLATES = new ArrayList<>();
     static {
-        CREATE_TABLE_TEMPLATES.put("INTEGER PRIMARY KEY",
-                "INTEGER PRIMARY KEY AUTOINCREMENT");  // SQLite
-        CREATE_TABLE_TEMPLATES.put("INT PRIMARY KEY",
-                "INT AUTO_INCREMENT PRIMARY KEY");     // MySQL
+        CREATE_TABLE_TEMPLATES.add(new Double<>("INTEGER", "INT"));
+        CREATE_TABLE_TEMPLATES.add(new Double<>("AUTOINCREMENT", "AUTO_INCREMENT"));
     }
 
     public enum DatabaseType {
@@ -139,13 +134,11 @@ public class SQL implements AutoCloseable {
 
         for (int i = 0; i < columns.length; i++) {
             String column = columns[i];
-            // Apply database-specific modifications
-            for (Map.Entry<String, String> template : CREATE_TABLE_TEMPLATES.entrySet()) {
-                if (column.toUpperCase().contains(template.getKey())) {
-                    column = column.replaceAll("(?i)" + template.getKey(),
-                            databaseType == DatabaseType.SQLITE ?
-                                    CREATE_TABLE_TEMPLATES.get(template.getKey()) :
-                                    template.getValue());
+            for (Double<String, String> template : CREATE_TABLE_TEMPLATES) {
+                if (databaseType == DatabaseType.MYSQL) {
+                    column = column.replace(template.getKey(), template.getValue());
+                } else if (databaseType == DatabaseType.SQLITE) {
+                    column = column.replace(template.getValue(), template.getKey());
                 }
             }
             sql.append(column);
