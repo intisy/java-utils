@@ -258,23 +258,50 @@ public class SQL implements AutoCloseable {
     }
 
     private void logTableContents(String tableName, List<String> columns) throws SQLException {
-        logger.log("\n=== Table: " + tableName + " ===");
-        logger.log(String.join(" | ", columns));
-        logger.log(String.join("", Collections.nCopies(columns.size() * 20, "-")));
-
+        List<List<String>> rows = new ArrayList<>();
         String sql = "SELECT * FROM " + tableName;
         try (Statement stmt = getConnection().createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
             while (rs.next()) {
-                StringBuilder row = new StringBuilder();
+                List<String> row = new ArrayList<>();
                 for (String column : columns) {
-                    if (row.length() > 0) row.append(" | ");
                     String value = rs.getString(column);
-                    row.append(value == null ? "NULL" : value);
+                    row.add(value == null ? "NULL" : value);
                 }
-                logger.log(row.toString());
+                rows.add(row);
             }
         }
+        List<String> lines = new ArrayList<>();
+        int index = 0;
+        for (String column : columns) {
+            int length = column.length();
+            for (List<String> row : rows) {
+                length = Math.max(length, row.get(index).length());
+            }
+            String header = column + String.join("", Collections.nCopies(length - column.length(), " "));
+            String divider = String.join("", Collections.nCopies(length, "-"));
+            List<String> content = new ArrayList<>();
+            for (List<String> row : rows) {
+                content.add(row.get(index) + String.join("", Collections.nCopies(length - row.get(index).length(), " ")));
+            }
+            if (lines.isEmpty()) {
+                lines.add(header);
+                lines.add(divider);
+                lines.addAll(content);
+            } else {
+                lines.set(0, lines.get(0) + " | " + header);
+                lines.set(1, lines.get(1) + "---" + divider);
+                for (int i = 2; i - 2 < content.size(); i++) {
+                    lines.set(i, lines.get(i) + " | " + content.get(i - 2));
+                }
+            }
+            index++;
+        }
+        String title = "Table: " + tableName;
+        String divider = String.join("", Collections.nCopies(Math.max((lines.get(0).length() - title.length()) / 2, 0), "-"));
+        logger.log("\n" + divider + title + divider);
+        for (String line : lines)
+            logger.log(line);
     }
 
     private Connection getConnection() throws SQLException {
