@@ -230,7 +230,7 @@ public class SQL implements AutoCloseable {
         }
     }
 
-    public void logEntireDatabase() {
+    public void logDatabase() {
         try {
             DatabaseMetaData metaData = getConnection().getMetaData();
             try (ResultSet tables = metaData.getTables(null, null, "%", new String[]{"TABLE"})) {
@@ -244,7 +244,10 @@ public class SQL implements AutoCloseable {
         }
     }
 
-    private void logTable(String tableName, DatabaseMetaData metaData) throws SQLException {
+    public void logTable(String tableName) throws SQLException {
+        logTable(tableName, getConnection().getMetaData());
+    }
+    public void logTable(String tableName, DatabaseMetaData metaData) throws SQLException {
         List<String> columns = getTableColumns(tableName, metaData);
         logTableContents(tableName, columns);
     }
@@ -301,13 +304,13 @@ public class SQL implements AutoCloseable {
             index++;
         }
         String title = " Table: " + tableName + " ";
-        String divider = String.join("", Collections.nCopies(Math.max((lines.get(0).length() - title.length()) / 2, 0), "-"));
+        String divider = String.join("", Collections.nCopies(Math.max((lines.get(0).length() - title.length()) / 2, 3), "-"));
         String combined = divider + title + divider;
         combined += combined.length() < lines.get(0).length() ? "-" : "";
         logger.log("\n" + combined);
         for (String line : lines)
             logger.log(line);
-        logger.log(String.join("", Collections.nCopies(lines.get(0).length(), "-")));
+        logger.log(String.join("", Collections.nCopies(divider.length(), "-")));
     }
 
     private Connection getConnection() throws SQLException {
