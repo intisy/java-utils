@@ -28,6 +28,10 @@ public class SQL {
         this.connection = connection;
     }
 
+    public boolean hasData(String name, String... args) {
+        return !selectData(name, args[0], args).isEmpty();
+    }
+
     private Connection getConnection() {
         try {
             if (username != null && password != null)
@@ -153,7 +157,11 @@ public class SQL {
             logger.exception(e);
         }
     }
+
     public List<String> selectData(String name, String select, String... args) {
+        return select(name, select, args);
+    }
+    public List<String> select(String name, String select, String... args) {
         StringBuilder sql = new StringBuilder("SELECT " + select + " FROM " + name + " WHERE ");
         for (int i = 0; i < args.length; i += 2) {
             sql.append(args[i]).append(" = ?");
@@ -179,14 +187,22 @@ public class SQL {
     }
 
     private PreparedStatement prepareStatement(Connection connection, String sql) {
-        // You can cache prepared statements here
         try {
             return connection.prepareStatement(sql);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
     }
+
     public void insertData(String name, String... args) {
+        insert(name, args);
+    }
+    public void insertIfEmpty(String name, String... args) {
+        if (!hasData(name, args[0], args[1])) {
+            insert(name, args);
+        }
+    }
+    public void insert(String name, String... args) {
         StringBuilder sql = new StringBuilder("INSERT INTO " + name + " (");
         for (int i = 0; i < args.length; i+=2) {
             sql.append(args[i]);
@@ -217,6 +233,7 @@ public class SQL {
             throw new RuntimeException(e);
         }
     }
+
     public void updateData(String name, String primaryKey, String primaryKeyValue, String... args) {
         StringBuilder sql = new StringBuilder("UPDATE " + name + " SET ");
         for (int i = 0; i < args.length; i += 2) {
