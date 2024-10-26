@@ -53,6 +53,10 @@ public class SQL implements AutoCloseable {
         this.connection = initializeConnection();
     }
 
+    public DatabaseType getDatabaseType() {
+        return databaseType;
+    }
+
     public void setLogger(SimpleLogger logger) {
         this.logger = logger;
     }
