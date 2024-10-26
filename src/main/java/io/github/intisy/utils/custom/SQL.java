@@ -88,14 +88,11 @@ public class SQL implements AutoCloseable {
 
     public void deleteTable(String tableName) {
         String sql = "DROP TABLE IF EXISTS " + tableName;
-
-        try (Connection connection = getConnection();
-             Statement statement = connection.createStatement()) {
-
-            statement.execute(sql);
-            logger.debug("Table '" + tableName + "' deleted successfully.");
+        try (Statement statement = getConnection().createStatement()) {
+            executeSQL(statement, sql, "delete table");
         } catch (SQLException e) {
-            logger.exception(e);
+            logger.error("Failed to delete table: " + e.getMessage());
+            throw new RuntimeException("Table creation failed", e);
         }
     }
 
@@ -112,14 +109,22 @@ public class SQL implements AutoCloseable {
 
     public void createTable(String name, String... columns) {
         String sql = buildCreateTableStatement(name, columns);
-
         try (Statement statement = getConnection().createStatement()) {
-            logger.debug("Executing create table: " + sql);
-            statement.execute(sql);
-            logger.debug("Table created successfully: " + name);
+            executeSQL(statement, sql, "create table");
         } catch (SQLException e) {
             logger.error("Failed to create table: " + e.getMessage());
             throw new RuntimeException("Table creation failed", e);
+        }
+    }
+
+    public void executeSQL(Statement statement, String sql, String name) {
+        try {
+            logger.debug("Executing " + name + ": " + sql);
+            statement.execute(sql);
+            logger.debug("Executed " + name + " successfully: " + sql);
+        } catch (SQLException e) {
+            logger.error("Failed to " + name + ": " + e.getMessage());
+            throw new RuntimeException("SQL execution failed", e);
         }
     }
 
