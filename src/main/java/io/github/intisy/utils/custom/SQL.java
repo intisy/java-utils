@@ -14,8 +14,8 @@ import java.util.List;
 public class SQL implements AutoCloseable {
     private static final Log log = LogFactory.getLog(SQL.class);
     private final String url;
-    private final String username;
-    private final String password;
+    private String username;
+    private String password;
     private SimpleLogger logger;
     private final DatabaseType databaseType;
     private Connection connection;
@@ -49,6 +49,24 @@ public class SQL implements AutoCloseable {
         this.logger = logger;
         this.databaseType = detectDatabaseType();
         this.connection = initializeConnection();
+    }
+
+    public void setPassword(String password) {
+        this.password = password;
+        this.connection = initializeConnection();
+    }
+
+    public void setUsername(String username) {
+        this.username = username;
+        this.connection = initializeConnection();
+    }
+
+    public String getPassword() {
+        return password;
+    }
+
+    public String getUsername() {
+        return username;
     }
 
     public DatabaseType getDatabaseType() {
