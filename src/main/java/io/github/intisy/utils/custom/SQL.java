@@ -42,7 +42,7 @@ public class SQL implements AutoCloseable {
     }
 
     // Full constructor
-    public SQL(String url, String username, String password, SimpleLogger logger) {
+    private SQL(String url, String username, String password, SimpleLogger logger) {
         this.url = url;
         this.username = username;
         this.password = password;
@@ -170,14 +170,14 @@ public class SQL implements AutoCloseable {
         return sql.append(")").toString();
     }
 
-    public void insertDataIfEmpty(String tableName, String... columnsAndValues) {
+    public void insertDataIfEmpty(String tableName, Object... columnsAndValues) {
         if (columnsAndValues.length < 2) {
             throw new IllegalArgumentException("Must provide at least one column-value pair");
         }
 
         // Check if data exists using first column-value pair
-        List<String> existing = selectData(tableName, columnsAndValues[0],
-                columnsAndValues[0], columnsAndValues[1]);
+        List<String> existing = selectData(tableName, columnsAndValues[0].toString(),
+                columnsAndValues[0].toString(), columnsAndValues[1].toString());
 
         if (existing.isEmpty()) {
             insertData(tableName, columnsAndValues);
@@ -187,7 +187,7 @@ public class SQL implements AutoCloseable {
         }
     }
 
-    public void insertData(String tableName, String... columnsAndValues) {
+    public void insertData(String tableName, Object... columnsAndValues) {
         if (columnsAndValues.length % 2 != 0) {
             throw new IllegalArgumentException("Columns and values must be paired");
         }
@@ -196,7 +196,7 @@ public class SQL implements AutoCloseable {
 
         try (PreparedStatement stmt = prepareStatement(sql)) {
             for (int i = 1; i <= columnsAndValues.length / 2; i++) {
-                stmt.setString(i, columnsAndValues[i * 2 - 1]);
+                stmt.setString(i, columnsAndValues[i * 2 - 1].toString());
             }
 
             int rowsAffected = stmt.executeUpdate();
@@ -342,7 +342,7 @@ public class SQL implements AutoCloseable {
         return getConnection().prepareStatement(sql);
     }
 
-    private String buildInsertStatement(String tableName, String... columnsAndValues) {
+    private String buildInsertStatement(String tableName, Object... columnsAndValues) {
         StringBuilder columns = new StringBuilder();
         StringBuilder values = new StringBuilder();
 
@@ -351,7 +351,7 @@ public class SQL implements AutoCloseable {
                 columns.append(", ");
                 values.append(", ");
             }
-            columns.append(columnsAndValues[i]);
+            columns.append(columnsAndValues[i].toString());
             values.append("?");
         }
 
