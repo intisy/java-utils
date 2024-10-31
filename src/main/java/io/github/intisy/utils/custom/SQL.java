@@ -325,7 +325,8 @@ public class SQL implements AutoCloseable {
         String divider = String.join("", Collections.nCopies(Math.max((lines.get(0).length() - title.length()) / 2, 3), "-"));
         String combined = divider + title + divider;
         combined += combined.length() < lines.get(0).length() ? "-" : "";
-        logger.log("\n" + combined);
+        System.out.println("\n");
+        logger.log(combined);
         for (String line : lines)
             logger.log(line);
         logger.log(String.join("", Collections.nCopies(combined.length(), "-")));
