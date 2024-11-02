@@ -31,6 +31,12 @@ public class SQL implements AutoCloseable {
         UNKNOWN
     }
 
+    public enum Type {
+        NORMAL,
+        UPDATE,
+        QUERY,
+    }
+
     // Constructor for SQLite
     public SQL(String url) {
         this(url, null, null, new EmptyLogger());
@@ -109,7 +115,7 @@ public class SQL implements AutoCloseable {
     public void deleteTable(String tableName) {
         String sql = "DROP TABLE IF EXISTS " + tableName;
         try (Statement statement = getConnection().createStatement()) {
-            executeSQL(statement, sql, "delete table");
+            executeSQL(statement, sql, "delete table", Type.NORMAL);
         } catch (SQLException e) {
             logger.error("Failed to delete table: " + e.getMessage());
             throw new RuntimeException("Table creation failed", e);
@@ -130,18 +136,30 @@ public class SQL implements AutoCloseable {
     public void createTable(String name, String... columns) {
         String sql = buildCreateTableStatement(name, columns);
         try (Statement statement = getConnection().createStatement()) {
-            executeSQL(statement, sql, "create table");
+            executeSQL(statement, sql, "create table", Type.NORMAL);
         } catch (SQLException e) {
             logger.error("Failed to create table: " + e.getMessage());
             throw new RuntimeException("Table creation failed", e);
         }
     }
 
-    public void executeSQL(Statement statement, String sql, String name) {
+    public ResultSet executeSQL(Statement statement, String sql, String name, Type type) {
         try {
             logger.debug("Executing " + name + ": " + sql);
-            statement.execute(sql);
-            logger.debug("Executed " + name + " successfully: " + sql);
+            switch (type) {
+                case NORMAL:
+                    statement.execute(sql);
+                    logger.debug("Executed " + name + " successfully: " + sql);
+                    return null;
+                case UPDATE:
+                    int rowsAffected = statement.executeUpdate(sql);
+                    logger.debug("Executed " + name + " successfully with " + rowsAffected + " affected rows");
+                    return null;
+                case QUERY:
+                    return statement.executeQuery(sql);
+                default:
+                    return null;
+            }
         } catch (SQLException e) {
             logger.error("Failed to " + name + ": " + e.getMessage());
             throw new RuntimeException("SQL execution failed", e);
@@ -199,8 +217,7 @@ public class SQL implements AutoCloseable {
                 stmt.setString(i, columnsAndValues[i * 2 - 1].toString());
             }
 
-            int rowsAffected = stmt.executeUpdate();
-            logger.debug("Inserted " + rowsAffected + " rows into " + tableName);
+            executeSQL(stmt, sql, "insert data", Type.UPDATE);
         } catch (SQLException e) {
             logger.error("Insert failed: " + e.getMessage());
             throw new RuntimeException("Failed to insert data", e);
@@ -216,7 +233,7 @@ public class SQL implements AutoCloseable {
                 stmt.setString(i + 1, whereClause[i * 2 + 1]);
             }
 
-            try (ResultSet rs = stmt.executeQuery()) {
+            try (ResultSet rs = executeSQL(stmt, sql, "select data", Type.QUERY)) {
                 while (rs.next()) {
                     results.add(rs.getString(columnToSelect));
                 }
@@ -240,8 +257,7 @@ public class SQL implements AutoCloseable {
             }
             stmt.setString(paramIndex, primaryKeyValue);
 
-            int rowsAffected = stmt.executeUpdate();
-            logger.debug("Updated " + rowsAffected + " rows in " + tableName);
+            executeSQL(stmt, sql, "update data", Type.UPDATE);
         } catch (SQLException e) {
             logger.error("Update failed: " + e.getMessage());
             throw new RuntimeException("Failed to update data", e);
