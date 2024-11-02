@@ -170,28 +170,6 @@ public class SQL implements AutoCloseable {
         }
     }
 
-    private String buildCreateTableStatement(String name, String... columns) {
-        StringBuilder sql = new StringBuilder("CREATE TABLE IF NOT EXISTS ")
-                .append(name)
-                .append(" (");
-
-        for (int i = 0; i < columns.length; i++) {
-            String column = columns[i];
-            for (Double<String, String> template : CREATE_TABLE_TEMPLATES) {
-                if (databaseType == DatabaseType.MYSQL) {
-                    column = column.replace(template.getKey(), template.getValue());
-                } else if (databaseType == DatabaseType.SQLITE) {
-                    column = column.replace(template.getValue(), template.getKey());
-                }
-            }
-            sql.append(column);
-            if (i < columns.length - 1) {
-                sql.append(", ");
-            }
-        }
-        return sql.append(")").toString();
-    }
-
     public void insertDataIfEmpty(String tableName, Object... columnsAndValues) {
         if (columnsAndValues.length < 2) {
             throw new IllegalArgumentException("Must provide at least one column-value pair");
@@ -342,16 +320,48 @@ public class SQL implements AutoCloseable {
         return connection;
     }
 
+    private String buildCreateTableStatement(String name, String... columns) {
+        StringBuilder sql = new StringBuilder("CREATE TABLE IF NOT EXISTS ")
+                .append(name)
+                .append(" (");
+
+        for (int i = 0; i < columns.length; i++) {
+            String column = columns[i];
+            for (Double<String, String> template : CREATE_TABLE_TEMPLATES) {
+                if (databaseType == DatabaseType.MYSQL) {
+                    column = column.replace(template.getKey(), template.getValue());
+                } else if (databaseType == DatabaseType.SQLITE) {
+                    column = column.replace(template.getValue(), template.getKey());
+                }
+            }
+            sql.append(column);
+            if (i < columns.length - 1) {
+                sql.append(", ");
+            }
+        }
+        return sql.append(")").toString();
+    }
+
     private String buildInsertStatement(String tableName, Object... columnsAndValues) {
+        if (columnsAndValues.length % 2 != 0) {
+            throw new IllegalArgumentException("Columns and values must be paired.");
+        }
+
         StringBuilder columns = new StringBuilder();
         StringBuilder values = new StringBuilder();
+
         for (int i = 0; i < columnsAndValues.length; i += 2) {
-            if (columnsAndValues[i + 1] == null) {
-                throw new IllegalArgumentException("Value for column '" + columnsAndValues[i] + "' cannot be null");
-            }
             columns.append(columnsAndValues[i]).append(", ");
-            values.append("'").append(columnsAndValues[i + 1].toString().replace("'", "''")).append("', ");
+
+            // Check if value is null and append accordingly
+            if (columnsAndValues[i + 1] == null) {
+                values.append("NULL, ");
+            } else {
+                values.append("'").append(columnsAndValues[i + 1].toString().replace("'", "''")).append("', ");
+            }
         }
+
+        // Remove trailing commas
         columns.setLength(columns.length() - 2);
         values.setLength(values.length() - 2);
 
@@ -373,11 +383,14 @@ public class SQL implements AutoCloseable {
             for (int i = 0; i < whereClause.length; i += 2) {
                 if (i > 0) sql.append(" AND ");
 
-                // Append the column name and value directly, wrapping values in quotes
-                sql.append(whereClause[i])
-                        .append(" = '")
-                        .append(whereClause[i + 1].replace("'", "''")) // Escape single quotes
-                        .append("'");
+                sql.append(whereClause[i]);
+
+                // Check if the value is null and append accordingly
+                if (whereClause[i + 1] == null) {
+                    sql.append(" IS NULL");
+                } else {
+                    sql.append(" = '").append(whereClause[i + 1].replace("'", "''")).append("'");
+                }
             }
         }
 
@@ -396,11 +409,14 @@ public class SQL implements AutoCloseable {
         for (int i = 0; i < columnsAndValues.length; i += 2) {
             if (i > 0) sql.append(", ");
 
-            // Append column name and value directly, with values wrapped in quotes
-            sql.append(columnsAndValues[i])
-                    .append(" = '")
-                    .append(columnsAndValues[i + 1].replace("'", "''")) // Escape single quotes
-                    .append("'");
+            sql.append(columnsAndValues[i]).append(" = ");
+
+            // Check if value is null and append accordingly
+            if (columnsAndValues[i + 1] == null) {
+                sql.append("NULL");
+            } else {
+                sql.append("'").append(columnsAndValues[i + 1].toString().replace("'", "''")).append("'");
+            }
         }
 
         sql.append(" WHERE ").append(primaryKey).append(" = '").append(primaryKeyValue.replace("'", "''")).append("'");
