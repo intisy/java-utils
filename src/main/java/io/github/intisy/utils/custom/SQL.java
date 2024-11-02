@@ -100,8 +100,8 @@ public class SQL implements AutoCloseable {
 
             // Database-specific initialization
             if (databaseType == DatabaseType.SQLITE) {
-                try (Statement stmt = conn.createStatement()) {
-                    stmt.execute("PRAGMA foreign_keys = ON");
+                try (Statement statement = conn.createStatement()) {
+                    statement.execute("PRAGMA foreign_keys = ON");
                 }
             }
 
@@ -145,7 +145,7 @@ public class SQL implements AutoCloseable {
 
     public ResultSet executeSQL(Statement statement, String sql, String name, Type type) {
         try {
-            logger.debug("Executing " + name + ": " + sql);
+            logger.debug("Executing " + name + ": " + sql + "with type " + type);
             switch (type) {
                 case NORMAL:
                     statement.execute(sql);
@@ -211,13 +211,8 @@ public class SQL implements AutoCloseable {
         }
 
         String sql = buildInsertStatement(tableName, columnsAndValues);
-
-        try (PreparedStatement stmt = prepareStatement(sql)) {
-            for (int i = 1; i <= columnsAndValues.length / 2; i++) {
-                stmt.setString(i, columnsAndValues[i * 2 - 1].toString());
-            }
-
-            executeSQL(stmt, sql, "insert data", Type.UPDATE);
+        try (Statement statement = getConnection().createStatement()) {
+            executeSQL(statement, sql, "insert data", Type.UPDATE);
         } catch (SQLException e) {
             logger.error("Insert failed: " + e.getMessage());
             throw new RuntimeException("Failed to insert data", e);
@@ -227,13 +222,8 @@ public class SQL implements AutoCloseable {
     public List<String> selectData(String tableName, String columnToSelect, String... whereClause) {
         String sql = buildSelectStatement(tableName, columnToSelect, whereClause);
         List<String> results = new ArrayList<>();
-
-        try (PreparedStatement stmt = prepareStatement(sql)) {
-            for (int i = 0; i < whereClause.length / 2; i++) {
-                stmt.setString(i + 1, whereClause[i * 2 + 1]);
-            }
-
-            try (ResultSet rs = executeSQL(stmt, sql, "select data", Type.QUERY)) {
+        try (Statement statement = getConnection().createStatement()) {
+            try (ResultSet rs = executeSQL(statement, sql, "select data", Type.QUERY)) {
                 while (rs.next()) {
                     results.add(rs.getString(columnToSelect));
                 }
@@ -246,18 +236,11 @@ public class SQL implements AutoCloseable {
         return results;
     }
 
-    public void updateData(String tableName, String primaryKey, String primaryKeyValue,
-                           String... columnsAndValues) {
+    public void updateData(String tableName, String primaryKey, String primaryKeyValue, String... columnsAndValues) {
         String sql = buildUpdateStatement(tableName, primaryKey, columnsAndValues);
-
-        try (PreparedStatement stmt = prepareStatement(sql)) {
-            int paramIndex = 1;
-            for (int i = 1; i < columnsAndValues.length; i += 2) {
-                stmt.setString(paramIndex++, columnsAndValues[i]);
-            }
-            stmt.setString(paramIndex, primaryKeyValue);
-
-            executeSQL(stmt, sql, "update data", Type.UPDATE);
+        List<String> results = new ArrayList<>();
+        try (Statement statement = getConnection().createStatement()) {
+            executeSQL(statement, sql, "update data", Type.UPDATE);
         } catch (SQLException e) {
             logger.error("Update failed: " + e.getMessage());
             throw new RuntimeException("Failed to update data", e);
@@ -300,8 +283,8 @@ public class SQL implements AutoCloseable {
     private void logTableContents(String tableName, List<String> columns) throws SQLException {
         List<List<String>> rows = new ArrayList<>();
         String sql = "SELECT * FROM " + tableName;
-        try (Statement stmt = getConnection().createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
+        try (Statement statement = getConnection().createStatement();
+             ResultSet rs = statement.executeQuery(sql)) {
             while (rs.next()) {
                 List<String> row = new ArrayList<>();
                 for (String column : columns) {
@@ -353,10 +336,6 @@ public class SQL implements AutoCloseable {
             connection = initializeConnection();
         }
         return connection;
-    }
-
-    private PreparedStatement prepareStatement(String sql) throws SQLException {
-        return getConnection().prepareStatement(sql);
     }
 
     private String buildInsertStatement(String tableName, Object... columnsAndValues) {
