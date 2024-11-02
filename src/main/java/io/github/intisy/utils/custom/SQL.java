@@ -149,7 +149,7 @@ public class SQL implements AutoCloseable {
 
     public ResultSet executeSQL(Statement statement, String sql, String name, Type type) {
         try {
-            logger.debug("Executing " + name + ": " + sql + "with type " + type);
+            logger.debug("Executing " + name + ": '" + sql + "' with type " + type);
             switch (type) {
                 case NORMAL:
                     statement.execute(sql);
@@ -345,18 +345,17 @@ public class SQL implements AutoCloseable {
     private String buildInsertStatement(String tableName, Object... columnsAndValues) {
         StringBuilder columns = new StringBuilder();
         StringBuilder values = new StringBuilder();
-
         for (int i = 0; i < columnsAndValues.length; i += 2) {
-            if (i > 0) {
-                columns.append(", ");
-                values.append(", ");
+            if (columnsAndValues[i + 1] == null) {
+                throw new IllegalArgumentException("Value for column '" + columnsAndValues[i] + "' cannot be null");
             }
-            columns.append(columnsAndValues[i].toString());
-            values.append("?");
+            columns.append(columnsAndValues[i]).append(", ");
+            values.append("'").append(columnsAndValues[i + 1].toString().replace("'", "''")).append("', ");
         }
+        columns.setLength(columns.length() - 2);
+        values.setLength(values.length() - 2);
 
-        return String.format("INSERT INTO %s (%s) VALUES (%s)",
-                tableName, columns, values);
+        return "INSERT INTO " + tableName + " (" + columns + ") VALUES (" + values + ")";
     }
 
     private String buildSelectStatement(String tableName, String columnToSelect,
