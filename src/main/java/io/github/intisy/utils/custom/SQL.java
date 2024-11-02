@@ -149,7 +149,7 @@ public class SQL implements AutoCloseable {
 
     public ResultSet executeSQL(Statement statement, String sql, String name, Type type) {
         try {
-            logger.debug("Executing " + name + ": '" + sql + "' with type " + type);
+            logger.debug("Executing " + name + ": \"" + sql + "\" with type " + type);
             switch (type) {
                 case NORMAL:
                     statement.execute(sql);
@@ -241,7 +241,7 @@ public class SQL implements AutoCloseable {
     }
 
     public void updateData(String tableName, String primaryKey, String primaryKeyValue, String... columnsAndValues) {
-        String sql = buildUpdateStatement(tableName, primaryKey, columnsAndValues);
+        String sql = buildUpdateStatement(tableName, primaryKey, primaryKeyValue, columnsAndValues);
         List<String> results = new ArrayList<>();
         try (Statement statement = getConnection().createStatement()) {
             executeSQL(statement, sql, "update data", Type.UPDATE);
@@ -358,36 +358,52 @@ public class SQL implements AutoCloseable {
         return "INSERT INTO " + tableName + " (" + columns + ") VALUES (" + values + ")";
     }
 
-    private String buildSelectStatement(String tableName, String columnToSelect,
-                                        String... whereClause) {
+    private String buildSelectStatement(String tableName, String columnToSelect, String... whereClause) {
         StringBuilder sql = new StringBuilder("SELECT ")
                 .append(columnToSelect)
                 .append(" FROM ")
                 .append(tableName);
 
         if (whereClause.length > 0) {
+            if (whereClause.length % 2 != 0) {
+                throw new IllegalArgumentException("WHERE clause parameters must be in column-value pairs.");
+            }
+
             sql.append(" WHERE ");
             for (int i = 0; i < whereClause.length; i += 2) {
                 if (i > 0) sql.append(" AND ");
-                sql.append(whereClause[i]).append(" = ?");
+
+                // Append the column name and value directly, wrapping values in quotes
+                sql.append(whereClause[i])
+                        .append(" = '")
+                        .append(whereClause[i + 1].replace("'", "''")) // Escape single quotes
+                        .append("'");
             }
         }
 
         return sql.toString();
     }
 
-    private String buildUpdateStatement(String tableName, String primaryKey,
-                                        String... columnsAndValues) {
+    private String buildUpdateStatement(String tableName, String primaryKey, String primaryKeyValue, String... columnsAndValues) {
+        if (columnsAndValues.length % 2 != 0) {
+            throw new IllegalArgumentException("Columns and values must be paired.");
+        }
+
         StringBuilder sql = new StringBuilder("UPDATE ")
                 .append(tableName)
                 .append(" SET ");
 
         for (int i = 0; i < columnsAndValues.length; i += 2) {
             if (i > 0) sql.append(", ");
-            sql.append(columnsAndValues[i]).append(" = ?");
+
+            // Append column name and value directly, with values wrapped in quotes
+            sql.append(columnsAndValues[i])
+                    .append(" = '")
+                    .append(columnsAndValues[i + 1].replace("'", "''")) // Escape single quotes
+                    .append("'");
         }
 
-        sql.append(" WHERE ").append(primaryKey).append(" = ?");
+        sql.append(" WHERE ").append(primaryKey).append(" = '").append(primaryKeyValue.replace("'", "''")).append("'");
         return sql.toString();
     }
 }
