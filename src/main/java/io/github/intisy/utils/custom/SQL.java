@@ -83,6 +83,10 @@ public class SQL implements AutoCloseable {
         this.logger = logger;
     }
 
+    public SimpleLogger getLogger() {
+        return logger;
+    }
+
     private DatabaseType detectDatabaseType() {
         if (url.toLowerCase().contains("sqlite")) {
             return DatabaseType.SQLITE;
