@@ -87,6 +87,43 @@ public class SQL implements AutoCloseable {
         return logger;
     }
 
+    public void deleteData(String tableName, String... whereClause) {
+        String sql = buildDeleteStatement(tableName, whereClause);
+        try (Statement statement = getConnection().createStatement()) {
+            executeSQL(statement, sql, "delete data", Type.UPDATE);
+        } catch (SQLException e) {
+            logger.error("Delete failed: " + e.getMessage());
+            throw new RuntimeException("Failed to delete data", e);
+        }
+    }
+
+    private String buildDeleteStatement(String tableName, String... whereClause) {
+        StringBuilder sql = new StringBuilder("DELETE FROM ")
+                .append(tableName);
+
+        if (whereClause.length > 0) {
+            if (whereClause.length % 2 != 0) {
+                throw new IllegalArgumentException("WHERE clause parameters must be in column-value pairs.");
+            }
+
+            sql.append(" WHERE ");
+            for (int i = 0; i < whereClause.length; i += 2) {
+                if (i > 0) sql.append(" AND ");
+
+                sql.append(whereClause[i]);
+
+                // Check if the value is null and append accordingly
+                if (whereClause[i + 1] == null) {
+                    sql.append(" IS NULL");
+                } else {
+                    sql.append(" = '").append(whereClause[i + 1].replace("'", "''")).append("'");
+                }
+            }
+        }
+
+        return sql.toString();
+    }
+
     private DatabaseType detectDatabaseType() {
         if (url.toLowerCase().contains("sqlite")) {
             return DatabaseType.SQLITE;
