@@ -21,4 +21,5 @@ dependencies {
     githubImplementation "intisy:simple-logger:1.14"
     implementation "org.apache.httpcomponents:httpclient:4.5.14"
     implementation "org.kohsuke:github-api:1.99"
+    implementation "com.google.code.gson:gson:2.11.0"
 }
