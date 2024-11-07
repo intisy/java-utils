@@ -9,6 +9,8 @@ import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * This class provides utility methods for handling HTTP connections.
@@ -87,9 +89,14 @@ public class ConnectionUtils {
     }
 
     public static JsonObject authorizedRequest(String apiUrl, String key, JsonObject jsonPayload) {
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Authorization", key);
+        return headerRequest(apiUrl, headers, jsonPayload);
+    }
+    public static JsonObject headerRequest(String apiUrl, Map<String, String> headers, JsonObject jsonPayload) {
         try {
             HttpURLConnection connection = post(apiUrl);
-            connection.setRequestProperty("Authorization", key);
+            headers.forEach(connection::setRequestProperty);
             connectionPayload(jsonPayload, connection);
             return handleResponse(connection);
         } catch (IOException e) {
