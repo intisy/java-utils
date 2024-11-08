@@ -22,4 +22,6 @@ dependencies {
     implementation "org.apache.httpcomponents:httpclient:4.5.14"
     implementation "org.kohsuke:github-api:1.99"
     implementation "com.google.code.gson:gson:2.11.0"
+    implementation "org.eclipse.jgit:org.eclipse.jgit:5.13.3.202401111512-r"
+    implementation "org.kohsuke:github-api:1.324"
 }
