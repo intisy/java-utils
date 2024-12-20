@@ -44,9 +44,14 @@ public class GitHub {
     private final List<File> createdFiles = new ArrayList<>();
     private final List<File> modifyFiles = new ArrayList<>();
 
+    public GitHub(String repoOwner, String repoName) {
+        this(repoOwner, repoName, null, false);
+    }
+
     public GitHub(String repoOwner, String repoName, String accessToken) {
         this(repoOwner, repoName, accessToken, false);
     }
+
     public GitHub(String repoOwner, String repoName, String accessToken, boolean debug) {
         this.repoOwner = repoOwner;
         this.repoName = repoName;
@@ -70,7 +75,8 @@ public class GitHub {
         String url = String.format("%s/repos/%s/%s", API_URL, repoOwner, repoName);
         try (CloseableHttpClient httpClient = HttpClients.createDefault()) {
             HttpGet httpGet = new HttpGet(url);
-            httpGet.setHeader("Authorization", "token " + accessToken);
+            if (accessToken != null)
+                httpGet.setHeader("Authorization", "token " + accessToken);
             httpGet.setHeader("Accept", "application/vnd.github.v3+json");
             Boolean value = null;
             String ss = null;
@@ -110,7 +116,8 @@ public class GitHub {
         Path zipFilePath = outputDir.getParent().resolve(fileName);
         HttpURLConnection connection = (HttpURLConnection) url.openConnection();
         connection.setRequestMethod("GET");
-        connection.setRequestProperty("Authorization", "token " + accessToken);
+        if (accessToken != null)
+            connection.setRequestProperty("Authorization", "token " + accessToken);
         try (InputStream in = connection.getInputStream();
              FileOutputStream fos = new FileOutputStream(zipFilePath.toFile())) {
             byte[] buffer = new byte[4096];
@@ -215,7 +222,8 @@ public class GitHub {
 
         try (CloseableHttpClient httpClient = HttpClients.createDefault()) {
             HttpGet httpGet = new HttpGet(url);
-            httpGet.setHeader("Authorization", "token " + accessToken);
+            if (accessToken != null)
+                httpGet.setHeader("Authorization", "token " + accessToken);
             httpGet.setHeader("Accept", "application/vnd.github.v3+json");
 
             try (CloseableHttpResponse response = httpClient.execute(httpGet)) {
@@ -242,7 +250,8 @@ public class GitHub {
             json.addProperty("private", isPrivate);
             try (CloseableHttpClient httpClient = HttpClients.createDefault()) {
                 HttpPost httpPost = new HttpPost(url);
-                httpPost.setHeader("Authorization", "token " + accessToken);
+                if (accessToken != null)
+                    httpPost.setHeader("Authorization", "token " + accessToken);
                 httpPost.setHeader("Accept", "application/vnd.github.v3+json");
                 httpPost.setEntity(new StringEntity(json.toString()));
                 JsonObject jsonObject = null;
@@ -276,7 +285,8 @@ public class GitHub {
         while (jsonObject == null) {
             try (CloseableHttpClient httpClient = HttpClients.createDefault()) {
                 HttpPut httpPut = new HttpPut(url);
-                httpPut.setHeader("Authorization", "token " + accessToken);
+                if (accessToken != null)
+                    httpPut.setHeader("Authorization", "token " + accessToken);
                 httpPut.setHeader("Accept", "application/vnd.github.v3+json");
                 httpPut.setEntity(new StringEntity(json.toString()));
                 try (CloseableHttpResponse response = httpClient.execute(httpPut)) {
@@ -309,7 +319,8 @@ public class GitHub {
         while (jsonObject == null) {
             try (CloseableHttpClient httpClient = HttpClients.createDefault()) {
                 HttpPut httpPut = new HttpPut(url);
-                httpPut.setHeader("Authorization", "token " + accessToken);
+                if (accessToken != null)
+                    httpPut.setHeader("Authorization", "token " + accessToken);
                 httpPut.setHeader("Accept", "application/vnd.github.v3+json");
                 httpPut.setEntity(new StringEntity(json.toString()));
                 try (CloseableHttpResponse response = httpClient.execute(httpPut)) {
@@ -360,7 +371,8 @@ public class GitHub {
 
     private HttpDeleteWithBody getHttpDeleteWithBody(String commitMessage, String url, String sha) {
         HttpDeleteWithBody httpDelete = new HttpDeleteWithBody(url);
-        httpDelete.setHeader("Authorization", "token " + accessToken);
+        if (accessToken != null)
+            httpDelete.setHeader("Authorization", "token " + accessToken);
         httpDelete.setHeader("Accept", "application/vnd.github.v3+json");
 
         // Creating the JSON payload for the commit
@@ -379,7 +391,8 @@ public class GitHub {
         JsonObject jsonObject = null;
         try (CloseableHttpClient httpClient = HttpClients.createDefault()) {
             HttpGet httpGet = new HttpGet(url);
-            httpGet.setHeader("Authorization", "token " + accessToken);
+            if (accessToken != null)
+                httpGet.setHeader("Authorization", "token " + accessToken);
             httpGet.setHeader("Accept", "application/vnd.github.v3+json");
             while (jsonObject == null) {
                 try (CloseableHttpResponse response = httpClient.execute(httpGet)) {
@@ -534,7 +547,8 @@ public class GitHub {
 
         try (CloseableHttpClient httpClient = HttpClients.createDefault()) {
             HttpGet httpGet = new HttpGet(url);
-            httpGet.setHeader("Authorization", "token " + accessToken);
+            if (accessToken != null)
+                httpGet.setHeader("Authorization", "token " + accessToken);
             httpGet.setHeader("Accept", "application/vnd.github.v3+json");
             JsonObject jsonObject = null;
             while (jsonObject == null) {
@@ -556,7 +570,8 @@ public class GitHub {
 
         try (CloseableHttpClient httpClient = HttpClients.createDefault()) {
             HttpGet httpGet = new HttpGet(url);
-            httpGet.setHeader("Authorization", "token " + accessToken);
+            if (accessToken != null)
+                httpGet.setHeader("Authorization", "token " + accessToken);
             httpGet.setHeader("Accept", "application/vnd.github.v3+json");
             JsonElement jsonObject = null;
             while (jsonObject == null) {
@@ -579,7 +594,8 @@ public class GitHub {
 
         try (CloseableHttpClient httpClient = HttpClients.createDefault()) {
             HttpGet httpGet = new HttpGet(url);
-            httpGet.setHeader("Authorization", "token " + accessToken);
+            if (accessToken != null)
+                httpGet.setHeader("Authorization", "token " + accessToken);
             httpGet.setHeader("Accept", "application/vnd.github.v3.diff");
 
             try (CloseableHttpResponse response = httpClient.execute(httpGet)) {
@@ -591,11 +607,9 @@ public class GitHub {
     public VersionAsset getAsset(String fileName) {
         StaticLogger.debug("Searching for newest jar file from " + repoName + " assets...");
         try {
-            // Connect to GitHub using OAuth token
-            org.kohsuke.github.GitHub github = org.kohsuke.github.GitHub.connectUsingOAuth(accessToken);
+            org.kohsuke.github.GitHub github = accessToken != null ? org.kohsuke.github.GitHub.connectUsingOAuth(accessToken) : org.kohsuke.github.GitHub.connect();
             List<GHRelease> releases = github.getRepository(repoOwner + "/" + repoName).listReleases().toList();
 
-            // Find the release by tag name
             GHRelease targetRelease = null;
             double top = 0;
             for (GHRelease release : releases) {
@@ -612,7 +626,6 @@ public class GitHub {
                 }
             }
 
-            // Get assets of the target release
             if (targetRelease != null) {
                 List<GHAsset> assets = targetRelease.getAssets();
                 if (!assets.isEmpty()) {
@@ -637,8 +650,7 @@ public class GitHub {
     public String getLatestTag() {
         StaticLogger.debug("Searching for newest jar file from " + repoName + " assets...");
         try {
-            // Connect to GitHub using OAuth token
-            org.kohsuke.github.GitHub github = org.kohsuke.github.GitHub.connectUsingOAuth(accessToken);
+            org.kohsuke.github.GitHub github = accessToken != null ? org.kohsuke.github.GitHub.connectUsingOAuth(accessToken) : org.kohsuke.github.GitHub.connect();
             GHRepository repo = github.getRepository(repoOwner + "/" + repoName);
             PagedIterable<GHTag> tags = repo.listTags();
             GHTag latestTag = tags.iterator().next();
@@ -656,7 +668,8 @@ public class GitHub {
         HttpURLConnection connection = (HttpURLConnection) new URL(downloadUrl).openConnection();
         connection.setRequestMethod("GET");
         connection.setRequestProperty("Accept", "application/octet-stream");
-        connection.setRequestProperty("Authorization", "Bearer " + accessToken);
+        if (accessToken != null)
+            connection.setRequestProperty("Authorization", "Bearer " + accessToken);
 
         int responseCode = connection.getResponseCode();
 
