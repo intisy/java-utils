@@ -3,6 +3,7 @@ package io.github.intisy.utils.custom;
 import org.apache.http.client.methods.HttpEntityEnclosingRequestBase;
 import java.net.URI;
 
+@SuppressWarnings("unused")
 public class HttpDeleteWithBody extends HttpEntityEnclosingRequestBase {
 
     public static final String METHOD_NAME = "DELETE";
