@@ -19,10 +19,10 @@ public class SQL implements AutoCloseable {
     private SimpleLogger logger;
     private final DatabaseType databaseType;
     private Connection connection;
-    private static final List<Double<String, String>> CREATE_TABLE_TEMPLATES = new ArrayList<>();
+    private static final List<Doublet<String, String>> CREATE_TABLE_TEMPLATES = new ArrayList<>();
     static {
-        CREATE_TABLE_TEMPLATES.add(new Double<>("INTEGER", "INT"));
-        CREATE_TABLE_TEMPLATES.add(new Double<>("AUTOINCREMENT", "AUTO_INCREMENT"));
+        CREATE_TABLE_TEMPLATES.add(new Doublet<>("INTEGER", "INT"));
+        CREATE_TABLE_TEMPLATES.add(new Doublet<>("AUTOINCREMENT", "AUTO_INCREMENT"));
     }
 
     public enum DatabaseType {
@@ -364,7 +364,7 @@ public class SQL implements AutoCloseable {
 
         for (int i = 0; i < columns.length; i++) {
             String column = columns[i];
-            for (Double<String, String> template : CREATE_TABLE_TEMPLATES) {
+            for (Doublet<String, String> template : CREATE_TABLE_TEMPLATES) {
                 if (databaseType == DatabaseType.MYSQL) {
                     column = column.replace(template.getKey(), template.getValue());
                 } else if (databaseType == DatabaseType.SQLITE) {

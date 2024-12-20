@@ -1,11 +1,11 @@
 package io.github.intisy.utils.custom;
 
 @SuppressWarnings("unused")
-public class Double<K, V> {
+public class Doublet<K, V> {
     private K key;
     private V value;
 
-    public Double(K key, V value) {
+    public Doublet(K key, V value) {
         this.key = key;
         this.value = value;
     }
