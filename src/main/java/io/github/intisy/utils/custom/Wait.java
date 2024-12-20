@@ -4,6 +4,7 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
+@SuppressWarnings("unused")
 public class Wait {
     private final Lock lock = new ReentrantLock();
     private final Condition condition = lock.newCondition();
