@@ -21,15 +21,18 @@ public class StringUtils {
         }
         return censored;
     }
+
     public static String value(String value, String key) {
         int i = value.indexOf(key) + key.length();
         return value.substring(i, value.indexOf("\"\n", i));
     }
+
     public static String replaceSpecialCharacters(String input, String replacement) {
         Pattern pattern = Pattern.compile("[^a-zA-Z0-9]");
         Matcher matcher = pattern.matcher(input);
         return matcher.replaceAll(replacement);
     }
+
     public static String generateUniqueString(String input) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
@@ -39,6 +42,7 @@ public class StringUtils {
             throw new RuntimeException("SHA-256 algorithm not found", e);
         }
     }
+
     public static List<String[]> parseData(List<String> inputData) {
         List<String[]> result = new ArrayList<>();
         for (String line : inputData) {
@@ -47,6 +51,7 @@ public class StringUtils {
         }
         return result;
     }
+
     public static String encrypt(String text, String key) {
         StringBuilder encrypted = new StringBuilder();
         for (int i = 0; i < text.length(); i++) {
@@ -62,6 +67,7 @@ public class StringUtils {
     public static String decrypt(String encryptedText, String key) {
         return encrypt(encryptedText, key); // XOR encryption is its own decryption
     }
+
     public static String encrypt(String password) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
@@ -71,6 +77,7 @@ public class StringUtils {
             throw new RuntimeException(e);
         }
     }
+    
     public static List<String> splitString(String string) {
         List<String> result = new ArrayList<>();
         StringBuilder line = new StringBuilder();
