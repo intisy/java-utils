@@ -660,6 +660,11 @@ public class GitHub {
         }
         throw new RuntimeException("Could not find an valid asset");
     }
+
+    public String getLastSha() throws IOException {
+        return getLastCommit().getAsJsonArray().get(0).getAsJsonObject().get("sha").getAsString();
+    }
+
     public void jar(File direction, GHAsset asset, String repoName, String repoOwner) throws IOException {
         String assetName = asset.getName();
         String downloadUrl = "https://api.github.com/repos/" + repoOwner + "/" + repoName + "/releases/assets/" + asset.getId();
