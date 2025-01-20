@@ -53,7 +53,7 @@ public class Git {
 
             git.close();
         } catch (IOException | GitAPIException exception) {
-            StaticLogger.exception(exception);
+            StaticLogger.error(exception);
         }
         return changes;
     }
@@ -99,7 +99,7 @@ public class Git {
             return true;
 
         } catch (IOException | GitAPIException exception) {
-            StaticLogger.exception(exception);
+            StaticLogger.error(exception);
         }
         return false;
     }
@@ -133,7 +133,7 @@ public class Git {
                 return false;
             }
         } catch (IOException | GitAPIException exception) {
-            StaticLogger.exception(exception);
+            StaticLogger.error(exception);
             return false;
         }
     }

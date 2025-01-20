@@ -14,7 +14,8 @@ public class Retry {
                 break;
             } catch (Exception e) {
                 Log.error(e);
-                ThreadUtils.sleep(wait);
+                if (wait > 0)
+                    ThreadUtils.sleep(wait);
             }
         }
     }
