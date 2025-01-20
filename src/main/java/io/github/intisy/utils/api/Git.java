@@ -20,10 +20,13 @@ import java.util.*;
 
 @SuppressWarnings("unused")
 public class Git {
-    String apiKey;
-    String repoName;
-    String repoOwner;
-    File path;
+    private String apiKey;
+    private String repoName;
+    private String repoOwner;
+    private final File path;
+    public Git(File path) {
+        this.path = path;
+    }
     public Git(String repoOwner, String repoName, String apiKey, File path) {
         this.apiKey = apiKey;
         this.repoName = repoName;
@@ -54,7 +57,7 @@ public class Git {
         }
         return changes;
     }
-    public String getLastCommitSHA() {
+    public String getCurrentSha() {
         try {
             org.eclipse.jgit.api.Git git = org.eclipse.jgit.api.Git.open(path);
             Iterable<RevCommit> commits = git.log().setMaxCount(1).call();
