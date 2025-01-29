@@ -452,7 +452,7 @@ public class SQL implements AutoCloseable {
             if (columnsAndValues[i + 1] == null) {
                 sql.append("NULL");
             } else {
-                sql.append("'").append(columnsAndValues[i + 1].toString().replace("'", "''")).append("'");
+                sql.append("'").append(columnsAndValues[i + 1].replace("'", "''")).append("'");
             }
         }
 

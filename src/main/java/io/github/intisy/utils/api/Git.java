@@ -1,6 +1,6 @@
 package io.github.intisy.utils.api;
 
-import io.github.intisy.simple.logger.StaticLogger;
+import io.github.intisy.simple.logger.Log;
 import org.eclipse.jgit.api.PullCommand;
 import org.eclipse.jgit.api.PullResult;
 import org.eclipse.jgit.api.Status;
@@ -53,7 +53,7 @@ public class Git {
 
             git.close();
         } catch (IOException | GitAPIException exception) {
-            StaticLogger.error(exception);
+            Log.error(exception);
         }
         return changes;
     }
@@ -70,14 +70,14 @@ public class Git {
     }
     public void cloneRepository() throws GitAPIException {
         String repositoryURL = "https://github.com/" + repoOwner + "/" + repoName;
-        StaticLogger.note("Cloning repository... (" + repositoryURL + ")");
+        Log.note("Cloning repository... (" + repositoryURL + ")");
         CredentialsProvider credentialsProvider = new UsernamePasswordCredentialsProvider(repoOwner, apiKey);
         try (org. eclipse. jgit. api. Git git = org.eclipse.jgit.api.Git.cloneRepository()
                 .setURI(repositoryURL)
                 .setCredentialsProvider(credentialsProvider)
                 .setDirectory(path)
                 .call()) {
-            StaticLogger.success("Repository cloned successfully.");
+            Log.success("Repository cloned successfully.");
         }
     }
     public boolean pushRepository(String filePath, String commitMessage) {
@@ -99,7 +99,7 @@ public class Git {
             return true;
 
         } catch (IOException | GitAPIException exception) {
-            StaticLogger.error(exception);
+            Log.error(exception);
         }
         return false;
     }
@@ -133,7 +133,7 @@ public class Git {
                 return false;
             }
         } catch (IOException | GitAPIException exception) {
-            StaticLogger.error(exception);
+            Log.error(exception);
             return false;
         }
     }
@@ -146,20 +146,20 @@ public class Git {
             git.fetch().setCredentialsProvider(credentialsProvider).call();
             List<Ref> branches = git.branchList().call();
             if (branches.size() > 1) {
-                StaticLogger.warning("Repository has multiple branches, might pull wrong branch...");
+                Log.warning("Repository has multiple branches, might pull wrong branch...");
                 for (Ref branch : branches) {
-                    StaticLogger.warning("Branch: " + branch.getName());
+                    Log.warning("Branch: " + branch.getName());
                 }
             }
             PullCommand pullCmd = git.pull()
                     .setCredentialsProvider(new UsernamePasswordCredentialsProvider(repoOwner, apiKey))
                     .setRemoteBranchName(branches.get(0).getName());
-            StaticLogger.note("Pulling Repository branch" + branches.get(0).getName());
+            Log.note("Pulling Repository branch" + branches.get(0).getName());
             PullResult result = pullCmd.call();
             if (!result.isSuccessful()) {
-                StaticLogger.error("Pull failed: " + branches.get(0).getName());
+                Log.error("Pull failed: " + branches.get(0).getName());
             } else {
-                StaticLogger.success("Successfully pulled repository.");
+                Log.success("Successfully pulled repository.");
             }
         }
     }
@@ -168,7 +168,7 @@ public class Git {
             if (!isRepoUpToDate())
                 pullRepository();
             else {
-                StaticLogger.note("Repository is up to date.");
+                Log.note("Repository is up to date.");
             }
         } else {
             cloneRepository();
