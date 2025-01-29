@@ -3,7 +3,7 @@ package io.github.intisy.utils.utils;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.stream.JsonReader;
-import io.github.intisy.simple.logger.StaticLogger;
+import io.github.intisy.simple.logger.Log;
 
 import java.io.*;
 import java.net.HttpURLConnection;
@@ -147,9 +147,9 @@ public class ConnectionUtils {
         try {
             JsonObject jsonObject = JsonParser.parseReader(reader).getAsJsonObject();
             if (responseCode != HttpURLConnection.HTTP_OK) {
-                StaticLogger.warning(jsonObject.toString());
+                Log.warning(jsonObject.toString());
                 if (jsonObject.get("message").getAsString().equals("Invalid key parameter")) {
-                    StaticLogger.error("Invalid API key found.");
+                    Log.error("Invalid API key found.");
                     //TODO rework login
                 }
             }

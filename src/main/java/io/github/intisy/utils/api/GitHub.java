@@ -4,7 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import io.github.intisy.simple.logger.StaticLogger;
+import io.github.intisy.simple.logger.Log;
 import io.github.intisy.utils.custom.HttpDeleteWithBody;
 import io.github.intisy.utils.custom.VersionAsset;
 import io.github.intisy.utils.utils.EncryptorUtils;
@@ -92,7 +92,7 @@ public class GitHub {
                         value = false;
                     }
                 } catch (NullPointerException exception) {
-                    StaticLogger.error("Wrong response: " + ss);
+                    Log.error("Wrong response: " + ss);
                     value = null;
                 }
             }
@@ -104,9 +104,10 @@ public class GitHub {
             String repoUrl = String.format("https://github.com/%s/%s/archive/%s.zip", repoOwner, repoName, sha);
             Path zipFilePath = downloadRepoAsZip(repoUrl, outputDir);
             unzip(zipFilePath, outputDir);
-            StaticLogger.debug("Repository downloaded successfully from commit SHA " + sha + "!", debug);
+            if (debug)
+                Log.debug("Repository downloaded successfully from commit SHA " + sha + "!");
         } catch (Exception e) {
-            StaticLogger.error("Download failed: " + e.getMessage());
+            Log.error("Download failed: " + e.getMessage());
         }
     }
 
@@ -176,7 +177,8 @@ public class GitHub {
     }
     public JsonObject deleteFolder(String folderPath, boolean encode) throws Exception {
         JsonObject response = null;
-        StaticLogger.debug("Deleting folder: " + folderPath.substring(1), debug);
+        if (debug)
+            Log.debug("Deleting folder: " + folderPath.substring(1));
         String encryptedFilePath;
         if (encode)
             encryptedFilePath = EncryptorUtils.encode(folderPath, "/");
@@ -199,7 +201,8 @@ public class GitHub {
     }
     public void deleteFolder(File path, String folder, boolean encode) throws Exception {
         if (!folder.isEmpty()) {
-            StaticLogger.debug("Deleting folder: " + folder.substring(1), debug);
+            if (debug)
+                Log.debug("Deleting folder: " + folder.substring(1));
         }
         File[] files = path.listFiles();
         if (files != null) {
@@ -261,7 +264,7 @@ public class GitHub {
                         String responseString = EntityUtils.toString(entity);
                         jsonObject = JsonParser.parseString(responseString).getAsJsonObject();
                     } catch (NullPointerException exception) {
-                        StaticLogger.error("Wrong response: " + jsonObject);
+                        Log.error("Wrong response: " + jsonObject);
                         jsonObject = null;
                     }
                 }
@@ -274,7 +277,8 @@ public class GitHub {
     public JsonObject createFile(String filePath, String fileContent) throws Exception {
         filePath = filePath.substring(1);
         String encryptedFilePath = EncryptorUtils.encode(filePath, "/");
-        StaticLogger.debug("Creating file: " + filePath + ", as " + encryptedFilePath, debug);
+        if (debug)
+            Log.debug("Creating file: " + filePath + ", as " + encryptedFilePath);
         String commitMessage = "Create " + filePath;
         String encodedContent = Base64.getEncoder().encodeToString(fileContent.getBytes());
         String url = String.format("%s/repos/%s/%s/contents/%s", API_URL, repoOwner, repoName, fixString(encryptedFilePath));
@@ -295,7 +299,7 @@ public class GitHub {
                     jsonObject = JsonParser.parseString(responseString).getAsJsonObject();
                 }
             } catch (NullPointerException exception) {
-                StaticLogger.error("Wrong response: " + jsonObject);
+                Log.error("Wrong response: " + jsonObject);
                 jsonObject = null;
             }
         }
@@ -303,7 +307,8 @@ public class GitHub {
     }
     public JsonObject updateFile(String filePath, String fileContent) throws Exception {
         filePath = filePath.substring(1);
-        StaticLogger.debug("Updating file: " + filePath, debug);
+        if (debug)
+            Log.debug("Updating file: " + filePath);
         String commitMessage = "Update " + filePath;
         filePath = EncryptorUtils.encode(filePath, "/");
         String encodedContent = Base64.getEncoder().encodeToString(fileContent.getBytes());
@@ -329,7 +334,7 @@ public class GitHub {
                     jsonObject = JsonParser.parseString(responseString).getAsJsonObject();
                 }
             } catch (NullPointerException exception) {
-                StaticLogger.error("Wrong response: " + jsonObject);
+                Log.error("Wrong response: " + jsonObject);
                 jsonObject = null;
             }
         }
@@ -348,7 +353,8 @@ public class GitHub {
             encryptedFilePath = EncryptorUtils.encode(filePath, "/");
         else
             encryptedFilePath = filePath;
-        StaticLogger.debug("Deleting file: " + filePath + ", as " + encryptedFilePath, debug);
+        if (debug)
+            Log.debug("Deleting file: " + filePath + ", as " + encryptedFilePath);
         String commitMessage = "Delete " + filePath;
         String sha = getFileSha(encryptedFilePath);
         String url = String.format("%s/repos/%s/%s/contents/%s", API_URL, repoOwner, repoName, fixString(encryptedFilePath));
@@ -362,7 +368,7 @@ public class GitHub {
                     jsonObject = JsonParser.parseString(responseString).getAsJsonObject();
                 }
             } catch (NullPointerException exception) {
-                StaticLogger.error("Wrong response: " + jsonObject);
+                Log.error("Wrong response: " + jsonObject);
                 jsonObject = null;
             }
         }
@@ -404,14 +410,14 @@ public class GitHub {
                     else
                         jsonObject = responseJson.getAsJsonObject();
                 } catch (NullPointerException exception) {
-                    StaticLogger.error("Wrong response: " + jsonObject);
+                    Log.error("Wrong response: " + jsonObject);
                     jsonObject = null;
                 }
             }
             return jsonObject.get("sha").getAsString();
         } catch (Exception e) {
-//            StaticLogger.error("Error getting file SHA: " + e.getMessage());
-//            StaticLogger.printStackTrace(null);
+//            Log.error("Error getting file SHA: " + e.getMessage());
+//            Log.printStackTrace(null);
             return null;
         }
     }
@@ -424,7 +430,7 @@ public class GitHub {
             JsonObject commitObject = commitElement.getAsJsonObject();
             String sha = commitObject.get("sha").getAsString();
             String message = commitObject.get("commit").getAsJsonObject().get("message").getAsString();
-            StaticLogger.debug("Applying commit " + sha + ": " + message);
+            Log.debug("Applying commit " + sha + ": " + message);
             processDiff(fetchCommitDiff(sha), storagePath);
         }
     }
@@ -437,8 +443,8 @@ public class GitHub {
         boolean isDeletedFile = false;
         boolean inHunk = false;
         int count = 0;
-        StaticLogger.debug(" -- from diff: -- ");
-        StaticLogger.debug(diff);
+        Log.debug(" -- from diff: -- ");
+        Log.debug(diff);
         for (String line : lines) {
             if (line.startsWith("diff --git")) {
                 if (currentFile != null) {
@@ -557,7 +563,7 @@ public class GitHub {
                     String responseString = EntityUtils.toString(entity);
                     jsonObject = JsonParser.parseString(responseString).getAsJsonObject();
                 } catch (NullPointerException exception) {
-                    StaticLogger.error("Wrong response: " + jsonObject);
+                    Log.error("Wrong response: " + jsonObject);
                     jsonObject = null;
                 }
             }
@@ -580,7 +586,7 @@ public class GitHub {
                     String responseString = EntityUtils.toString(entity);
                     jsonObject = JsonParser.parseString(responseString);
                 } catch (NullPointerException exception) {
-                    StaticLogger.error("Wrong response: " + jsonObject);
+                    Log.error("Wrong response: " + jsonObject);
                     jsonObject = null;
                 }
             }
@@ -605,7 +611,7 @@ public class GitHub {
         }
     }
     public VersionAsset getAsset(String fileName) {
-        StaticLogger.debug("Searching for newest jar file from " + repoName + " assets...");
+        Log.debug("Searching for newest jar file from " + repoName + " assets...");
         try {
             org.kohsuke.github.GitHub github = accessToken != null ? org.kohsuke.github.GitHub.connectUsingOAuth(accessToken) : org.kohsuke.github.GitHub.connect();
             List<GHRelease> releases = github.getRepository(repoOwner + "/" + repoName).listReleases().toList();
@@ -629,26 +635,26 @@ public class GitHub {
             if (targetRelease != null) {
                 List<GHAsset> assets = targetRelease.getAssets();
                 if (!assets.isEmpty()) {
-                    StaticLogger.debug("Found " + assets.size() + " asset(s) in the release");
+                    Log.debug("Found " + assets.size() + " asset(s) in the release");
                     for (GHAsset asset : assets) {
                         if (asset.getName().equals(fileName))
                             return new VersionAsset(targetRelease.getTagName(), asset);
                     }
                 } else {
-                    StaticLogger.warning("No assets found for the release");
+                    Log.warning("No assets found for the release");
                 }
             } else{
-                StaticLogger.warning("Release not found");
+                Log.warning("Release not found");
             }
         } catch (IOException e) {
-            StaticLogger.warning("Github exception while pulling asset: " + e.getMessage() + " (retrying in 5 seconds...)");
+            Log.warning("Github exception while pulling asset: " + e.getMessage() + " (retrying in 5 seconds...)");
             ThreadUtils.sleep(5000);
             return getAsset(fileName);
         }
         throw new RuntimeException("Could not find an valid asset");
     }
     public String getLatestTag() {
-        StaticLogger.debug("Searching for newest jar file from " + repoName + " assets...");
+        Log.debug("Searching for newest jar file from " + repoName + " assets...");
         try {
             org.kohsuke.github.GitHub github = accessToken != null ? org.kohsuke.github.GitHub.connectUsingOAuth(accessToken) : org.kohsuke.github.GitHub.connect();
             GHRepository repo = github.getRepository(repoOwner + "/" + repoName);
@@ -656,7 +662,7 @@ public class GitHub {
             GHTag latestTag = tags.iterator().next();
             return latestTag.getName();
         } catch (IOException e) {
-            StaticLogger.warning("Github exception while pulling asset: " + e.getMessage());
+            Log.warning("Github exception while pulling asset: " + e.getMessage());
         }
         throw new RuntimeException("Could not find an valid asset");
     }
@@ -668,7 +674,7 @@ public class GitHub {
     public void jar(File direction, GHAsset asset, String repoName, String repoOwner) throws IOException {
         String assetName = asset.getName();
         String downloadUrl = "https://api.github.com/repos/" + repoOwner + "/" + repoName + "/releases/assets/" + asset.getId();
-        StaticLogger.note("Downloading jar file from Github assets... (" + downloadUrl + ")");
+        Log.note("Downloading jar file from Github assets... (" + downloadUrl + ")");
 
         HttpURLConnection connection = (HttpURLConnection) new URL(downloadUrl).openConnection();
         connection.setRequestMethod("GET");
@@ -679,7 +685,7 @@ public class GitHub {
         int responseCode = connection.getResponseCode();
 
         if (responseCode != HttpURLConnection.HTTP_OK) {
-            StaticLogger.warning("Failed to download asset: " + responseCode + " (retrying in 5 seconds...)");
+            Log.warning("Failed to download asset: " + responseCode + " (retrying in 5 seconds...)");
             ThreadUtils.sleep(5000);
             connection.disconnect();
             jar(direction, asset, repoName, repoOwner);
@@ -692,9 +698,9 @@ public class GitHub {
                 while ((bytesRead = inputStream.read(buffer)) != -1) {
                     fos.write(buffer, 0, bytesRead);
                 }
-                StaticLogger.success("Downloaded and saved asset: " + assetName);
+                Log.success("Downloaded and saved asset: " + assetName);
             } catch (IOException e) {
-                StaticLogger.error("Error writing file: " + e.getMessage());
+                Log.error("Error writing file: " + e.getMessage());
                 throw e;
             } finally {
                 connection.disconnect();

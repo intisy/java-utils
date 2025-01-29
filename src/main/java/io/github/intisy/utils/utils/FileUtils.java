@@ -1,6 +1,6 @@
 package io.github.intisy.utils.utils;
 
-import io.github.intisy.simple.logger.StaticLogger;
+import io.github.intisy.simple.logger.Log;
 
 import java.io.*;
 import java.net.URL;
@@ -18,7 +18,7 @@ public class FileUtils {
             try {
                 return Files.readAllLines(directory, charset);
             } catch (IOException e) {
-                StaticLogger.warning("Exception while reading file, waiting for problem to resolve...");
+                Log.warning("Exception while reading file, waiting for problem to resolve...");
             }
         }
     }
