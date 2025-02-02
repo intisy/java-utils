@@ -2,13 +2,16 @@ plugins {
     id "java"
     id "com.github.johnrengelman.shadow" version "8.1.1"
     id "io.github.intisy.github-gradle" version "1.4.4"
-    id "io.github.intisy.online-gradle" version "1.6.2"
+    id "io.github.intisy.online-gradle" version "1.7.2"
 }
 
 online {
+    debug = true
+    autoUpdate = true
+    updateDelay = 3600
     presets = [
-            "https://raw.githubusercontent.com/intisy/gradle-snippets/main/default.preset",
-            "https://raw.githubusercontent.com/intisy/gradle-snippets/main/publish.preset"
+            "https://raw.githubusercontent.com/intisy/gradle-snippets/presets/default.preset:17",
+            "https://raw.githubusercontent.com/intisy/gradle-snippets/presets/publish.preset"
     ]
 }
 
