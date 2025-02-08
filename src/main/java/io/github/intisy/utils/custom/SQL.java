@@ -460,8 +460,8 @@ public class SQL implements AutoCloseable {
         return sql.toString();
     }
 
-    public void createTable(String tableName, String[] columns, String... constraints) {
-        String sql = buildCreateTableStatement(tableName, columns, constraints);
+    public void createTable(String tableName, String[] constraints, String... columns) {
+        String sql = buildCreateTableStatement(tableName, constraints, columns);
 
         try (Statement statement = this.getConnection().createStatement()) {
             this.executeSQL(statement, sql, "create table", SQL.Type.NORMAL);
@@ -471,21 +471,20 @@ public class SQL implements AutoCloseable {
         }
     }
 
-    private String buildCreateTableStatement(String tableName, String[] columns, String... constraints) {
+    private String buildCreateTableStatement(String tableName, String[] constraints, String... columns) {
+        if (constraints == null || constraints.length == 0)
+            return buildCreateTableStatement(tableName, columns);
+
         StringBuilder sb = new StringBuilder();
         sb.append("CREATE TABLE ").append(tableName).append(" (");
-        for (int i = 0; i < columns.length; i++) {
-            sb.append(columns[i]);
-            if (i < columns.length - 1 || (constraints != null && constraints.length > 0)) {
-                sb.append(", ");
-            }
+        for (String column : columns) {
+            sb.append(column);
+            sb.append(", ");
         }
-        if (constraints != null && constraints.length > 0) {
-            for (int i = 0; i < constraints.length; i++) {
-                sb.append(constraints[i]);
-                if (i < constraints.length - 1) {
-                    sb.append(", ");
-                }
+        for (int i = 0; i < constraints.length; i++) {
+            sb.append(constraints[i]);
+            if (i < constraints.length - 1) {
+                sb.append(", ");
             }
         }
         sb.append(")");
