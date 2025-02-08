@@ -459,4 +459,36 @@ public class SQL implements AutoCloseable {
         sql.append(" WHERE ").append(primaryKey).append(" = '").append(primaryKeyValue.replace("'", "''")).append("'");
         return sql.toString();
     }
+
+    public void createTable(String tableName, String[] columns, String... constraints) {
+        String sql = buildCreateTableStatement(tableName, columns, constraints);
+
+        try (Statement statement = this.getConnection().createStatement()) {
+            this.executeSQL(statement, sql, "create table", SQL.Type.NORMAL);
+        } catch (SQLException e) {
+            this.logger.error("Failed to create table: " + e.getMessage());
+            throw new RuntimeException("Table creation failed", e);
+        }
+    }
+
+    private String buildCreateTableStatement(String tableName, String[] columns, String... constraints) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("CREATE TABLE ").append(tableName).append(" (");
+        for (int i = 0; i < columns.length; i++) {
+            sb.append(columns[i]);
+            if (i < columns.length - 1 || (constraints != null && constraints.length > 0)) {
+                sb.append(", ");
+            }
+        }
+        if (constraints != null && constraints.length > 0) {
+            for (int i = 0; i < constraints.length; i++) {
+                sb.append(constraints[i]);
+                if (i < constraints.length - 1) {
+                    sb.append(", ");
+                }
+            }
+        }
+        sb.append(")");
+        return sb.toString();
+    }
 }
