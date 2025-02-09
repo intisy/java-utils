@@ -254,7 +254,7 @@ public class SQL implements AutoCloseable {
 
     private boolean isInvalidIdentifier(Object[] identifier) {
         for (Object object : identifier)
-            if (object == null || !object.toString().matches("[A-Za-z0-9_]+"))
+            if (object == null || !object.toString().split(" ")[0].matches("[A-Za-z0-9_]+"))
                 return true;
         return false;
     }
