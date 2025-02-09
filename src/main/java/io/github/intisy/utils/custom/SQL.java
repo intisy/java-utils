@@ -97,8 +97,8 @@ public class SQL implements AutoCloseable {
         }
     }
 
-    private boolean isValidIdentifier(String identifier) {
-        return identifier != null && identifier.matches("[A-Za-z0-9_]+");
+    private boolean isInvalidIdentifier(String identifier) {
+        return identifier == null || !identifier.matches("[A-Za-z0-9_]+");
     }
 
     private String buildDeleteStatement(String tableName, String... whereClause) {
@@ -188,25 +188,44 @@ public class SQL implements AutoCloseable {
         }
     }
 
+    public ResultSet executeSQL(String sql) {
+        try (Statement statement = getConnection().createStatement()) {
+            return executeSQL(statement, sql);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public ResultSet executeSQL(Statement statement, String sql) {
+        return executeSQL(statement, sql, null, null);
+    }
+
     public ResultSet executeSQL(Statement statement, String sql, String name, Type type) {
         try {
-            logger.debug("Executing " + name + ": \"" + sql + "\" with type " + type);
-            switch (type) {
-                case NORMAL:
-                    statement.execute(sql);
-                    logger.debug("Executed " + name + " successfully: " + sql);
-                    return null;
-                case UPDATE:
-                    int rowsAffected = statement.executeUpdate(sql);
-                    logger.debug("Executed " + name + " successfully with " + rowsAffected + " affected rows");
-                    return null;
-                case QUERY:
-                    return statement.executeQuery(sql);
-                default:
-                    return null;
+            if (name != null)
+                logger.debug("Executing " + name + ": \"" + sql + "\" with type " + type);
+            if (type != null)
+                switch (type) {
+                    case NORMAL:
+                        statement.execute(sql);
+                        logger.debug("Executed " + name + " successfully: " + sql);
+                        return null;
+                    case UPDATE:
+                        int rowsAffected = statement.executeUpdate(sql);
+                        logger.debug("Executed " + name + " successfully with " + rowsAffected + " affected rows");
+                        return null;
+                    case QUERY:
+                        return statement.executeQuery(sql);
+                    default:
+                        return null;
+                }
+            else {
+                statement.execute(sql);
+                return null;
             }
         } catch (SQLException e) {
-            logger.error("Failed to " + name + ": " + e.getMessage());
+            if (name != null)
+                logger.error("Failed to " + name + ": " + e.getMessage());
             throw new RuntimeException("SQL execution failed", e);
         }
     }
@@ -215,10 +234,10 @@ public class SQL implements AutoCloseable {
         if (columnsAndValues.length < 2) {
             throw new IllegalArgumentException("Must provide at least one column-value pair");
         }
-        if (!isValidIdentifier(tableName)) {
+        if (isInvalidIdentifier(tableName)) {
             throw new IllegalArgumentException("Invalid table name");
         }
-        if (!isValidIdentifier(columnsAndValues)) {
+        if (isInvalidIdentifier(columnsAndValues)) {
             throw new IllegalArgumentException("Invalid columns and values");
         }
 
@@ -233,21 +252,21 @@ public class SQL implements AutoCloseable {
         }
     }
 
-    private boolean isValidIdentifier(Object[] identifier) {
+    private boolean isInvalidIdentifier(Object[] identifier) {
         for (Object object : identifier)
             if (object == null || !object.toString().matches("[A-Za-z0-9_]+"))
-                return false;
-        return true;
+                return true;
+        return false;
     }
 
     public void insertData(String tableName, Object... columnsAndValues) {
         if (columnsAndValues.length % 2 != 0) {
             throw new IllegalArgumentException("Columns and values must be paired");
         }
-        if (!isValidIdentifier(tableName)) {
+        if (isInvalidIdentifier(tableName)) {
             throw new IllegalArgumentException("Invalid table name");
         }
-        if (!isValidIdentifier(columnsAndValues)) {
+        if (isInvalidIdentifier(columnsAndValues)) {
             throw new IllegalArgumentException("Invalid columns and values");
         }
 
@@ -261,13 +280,13 @@ public class SQL implements AutoCloseable {
     }
 
     public List<String> selectData(String tableName, String columnToSelect, String... whereClause) {
-        if (!isValidIdentifier(tableName)) {
+        if (isInvalidIdentifier(tableName)) {
             throw new IllegalArgumentException("Invalid table name");
         }
-        if (!isValidIdentifier(columnToSelect)) {
+        if (isInvalidIdentifier(columnToSelect)) {
             throw new IllegalArgumentException("Invalid column to select");
         }
-        if (!isValidIdentifier(whereClause)) {
+        if (isInvalidIdentifier(whereClause)) {
             throw new IllegalArgumentException("Invalid where clause");
         }
         String sql = buildSelectStatement(tableName, columnToSelect, whereClause);
@@ -287,16 +306,16 @@ public class SQL implements AutoCloseable {
     }
 
     public void updateData(String tableName, String primaryKey, String primaryKeyValue, String... columnsAndValues) {
-        if (!isValidIdentifier(tableName)) {
+        if (isInvalidIdentifier(tableName)) {
             throw new IllegalArgumentException("Invalid table name");
         }
-        if (!isValidIdentifier(primaryKey)) {
+        if (isInvalidIdentifier(primaryKey)) {
             throw new IllegalArgumentException("Invalid primary key");
         }
-        if (!isValidIdentifier(primaryKeyValue)) {
+        if (isInvalidIdentifier(primaryKeyValue)) {
             throw new IllegalArgumentException("Invalid primary value");
         }
-        if (!isValidIdentifier(columnsAndValues)) {
+        if (isInvalidIdentifier(columnsAndValues)) {
             throw new IllegalArgumentException("Invalid columns and values");
         }
         String sql = buildUpdateStatement(tableName, primaryKey, primaryKeyValue, columnsAndValues);
