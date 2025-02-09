@@ -97,7 +97,11 @@ public class SQL implements AutoCloseable {
     }
 
     private boolean isInvalidIdentifier(String identifier) {
-        return identifier != null && !identifier.matches(validCharacters);
+        if (identifier != null && !identifier.matches(validCharacters)) {
+            Log.error("Invalid identifier: " + identifier);
+            return true;
+        } else
+            return false;
     }
 
     private String buildDeleteStatement(String tableName, String... whereClause) {
