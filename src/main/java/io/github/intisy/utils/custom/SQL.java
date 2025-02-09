@@ -255,7 +255,7 @@ public class SQL implements AutoCloseable {
             if (object == null) {
                 Log.error("Invalid identifier: object is null");
                 return true;
-            } else if (!object.toString().split(" ")[0].matches("[A-Za-z0-9_]+")) {
+            } else if (!object.toString().split(" ")[0].matches("[A-Za-z0-9_-]+")) {
                 Log.error("Invalid identifier: " + object.toString().split(" ")[0]);
                 return true;
             }
