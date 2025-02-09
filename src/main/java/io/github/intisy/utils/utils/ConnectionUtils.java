@@ -152,8 +152,9 @@ public class ConnectionUtils {
             throw new IOException("Failed to parse JSON: " + e.getMessage());
         }
         if (responseCode != HttpURLConnection.HTTP_OK) {
-            throw new IOException("Response code: " + responseCode + " response: " + jsonObject.toString());
+            Log.error("Response code: " + responseCode + " response: " + jsonObject.toString());
         }
+        jsonObject.addProperty("code", responseCode);
         br.close();
         return jsonObject;
     }
