@@ -476,7 +476,7 @@ public class SQL implements AutoCloseable {
             return buildCreateTableStatement(tableName, columns);
 
         StringBuilder sb = new StringBuilder();
-        sb.append("CREATE TABLE ").append(tableName).append(" (");
+        sb.append("CREATE TABLE IF NOT EXISTS ").append(tableName).append(" (");
         for (String column : columns) {
             sb.append(column);
             sb.append(", ");
