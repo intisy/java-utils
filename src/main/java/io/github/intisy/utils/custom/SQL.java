@@ -1,9 +1,8 @@
 package io.github.intisy.utils.custom;
 
 import io.github.intisy.simple.logger.EmptyLogger;
+import io.github.intisy.simple.logger.Log;
 import io.github.intisy.simple.logger.SimpleLogger;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 
 import java.sql.*;
 import java.util.ArrayList;
@@ -12,7 +11,6 @@ import java.util.List;
 
 @SuppressWarnings("unused")
 public class SQL implements AutoCloseable {
-    private static final Log log = LogFactory.getLog(SQL.class);
     private final String url;
     private String username;
     private String password;
@@ -254,8 +252,13 @@ public class SQL implements AutoCloseable {
 
     private boolean isInvalidIdentifier(Object[] identifier) {
         for (Object object : identifier)
-            if (object == null || !object.toString().split(" ")[0].matches("[A-Za-z0-9_]+"))
+            if (object == null) {
+                Log.error("Invalid identifier: object is null");
                 return true;
+            } else if (!object.toString().split(" ")[0].matches("[A-Za-z0-9_]+")) {
+                Log.error("Invalid identifier: " + object.toString().split(" ")[0]);
+                return true;
+            }
         return false;
     }
 
