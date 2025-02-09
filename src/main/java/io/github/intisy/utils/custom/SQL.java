@@ -11,6 +11,7 @@ import java.util.List;
 
 @SuppressWarnings("unused")
 public class SQL implements AutoCloseable {
+    private final String validCharacters = "[A-Za-z0-9_-]+";
     private final String url;
     private String username;
     private String password;
@@ -96,7 +97,7 @@ public class SQL implements AutoCloseable {
     }
 
     private boolean isInvalidIdentifier(String identifier) {
-        return !identifier.matches("[A-Za-z0-9_-]+");
+        return identifier != null && !identifier.matches(validCharacters);
     }
 
     private String buildDeleteStatement(String tableName, String... whereClause) {
@@ -252,7 +253,7 @@ public class SQL implements AutoCloseable {
 
     private boolean isInvalidIdentifier(Object[] identifier) {
         for (Object object : identifier)
-            if (!object.toString().split(" ")[0].matches("[A-Za-z0-9_-]+")) {
+            if (object != null && (!object.toString().split("'")[1].split("'")[0].matches(validCharacters) || !object.toString().split(" ")[0].matches(validCharacters))) {
                 Log.error("Invalid identifier: " + object.toString().split(" ")[0]);
                 return true;
             }
