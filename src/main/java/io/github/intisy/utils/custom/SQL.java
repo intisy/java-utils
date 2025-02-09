@@ -11,7 +11,7 @@ import java.util.List;
 
 @SuppressWarnings("unused")
 public class SQL implements AutoCloseable {
-    private final String validCharacters = "[A-Za-z0-9_-]+";
+    private final String validCharacters = "[A-Za-z0-9_\\-!:;#$§%&/=?]+";
     private final String url;
     private String username;
     private String password;
