@@ -253,7 +253,7 @@ public class SQL implements AutoCloseable {
 
     private boolean isInvalidIdentifier(Object[] identifier) {
         for (Object object : identifier)
-            if (object != null && (!object.toString().split("'")[1].split("'")[0].matches(validCharacters) || !object.toString().split(" ")[0].matches(validCharacters))) {
+            if (object != null && ((object.toString().contains("'") && !object.toString().split("'")[1].split("'")[0].matches(validCharacters)) || !object.toString().split(" ")[0].matches(validCharacters))) {
                 Log.error("Invalid identifier: " + object.toString().split(" ")[0]);
                 return true;
             }
