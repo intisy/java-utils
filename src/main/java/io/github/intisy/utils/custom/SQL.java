@@ -97,6 +97,10 @@ public class SQL implements AutoCloseable {
         }
     }
 
+    private boolean isValidIdentifier(String identifier) {
+        return identifier != null && identifier.matches("[A-Za-z0-9_]+");
+    }
+
     private String buildDeleteStatement(String tableName, String... whereClause) {
         StringBuilder sql = new StringBuilder("DELETE FROM ")
                 .append(tableName);
@@ -211,8 +215,13 @@ public class SQL implements AutoCloseable {
         if (columnsAndValues.length < 2) {
             throw new IllegalArgumentException("Must provide at least one column-value pair");
         }
+        if (!isValidIdentifier(tableName)) {
+            throw new IllegalArgumentException("Invalid table name");
+        }
+        if (!isValidIdentifier(columnsAndValues)) {
+            throw new IllegalArgumentException("Invalid columns and values");
+        }
 
-        // Check if data exists using first column-value pair
         List<String> existing = selectData(tableName, columnsAndValues[0].toString(),
                 columnsAndValues[0].toString(), columnsAndValues[1].toString());
 
@@ -224,9 +233,22 @@ public class SQL implements AutoCloseable {
         }
     }
 
+    private boolean isValidIdentifier(Object[] identifier) {
+        for (Object object : identifier)
+            if (object == null || !object.toString().matches("[A-Za-z0-9_]+"))
+                return false;
+        return true;
+    }
+
     public void insertData(String tableName, Object... columnsAndValues) {
         if (columnsAndValues.length % 2 != 0) {
             throw new IllegalArgumentException("Columns and values must be paired");
+        }
+        if (!isValidIdentifier(tableName)) {
+            throw new IllegalArgumentException("Invalid table name");
+        }
+        if (!isValidIdentifier(columnsAndValues)) {
+            throw new IllegalArgumentException("Invalid columns and values");
         }
 
         String sql = buildInsertStatement(tableName, columnsAndValues);
@@ -239,6 +261,15 @@ public class SQL implements AutoCloseable {
     }
 
     public List<String> selectData(String tableName, String columnToSelect, String... whereClause) {
+        if (!isValidIdentifier(tableName)) {
+            throw new IllegalArgumentException("Invalid table name");
+        }
+        if (!isValidIdentifier(columnToSelect)) {
+            throw new IllegalArgumentException("Invalid column to select");
+        }
+        if (!isValidIdentifier(whereClause)) {
+            throw new IllegalArgumentException("Invalid where clause");
+        }
         String sql = buildSelectStatement(tableName, columnToSelect, whereClause);
         List<String> results = new ArrayList<>();
         try (Statement statement = getConnection().createStatement()) {
@@ -256,6 +287,18 @@ public class SQL implements AutoCloseable {
     }
 
     public void updateData(String tableName, String primaryKey, String primaryKeyValue, String... columnsAndValues) {
+        if (!isValidIdentifier(tableName)) {
+            throw new IllegalArgumentException("Invalid table name");
+        }
+        if (!isValidIdentifier(primaryKey)) {
+            throw new IllegalArgumentException("Invalid primary key");
+        }
+        if (!isValidIdentifier(primaryKeyValue)) {
+            throw new IllegalArgumentException("Invalid primary value");
+        }
+        if (!isValidIdentifier(columnsAndValues)) {
+            throw new IllegalArgumentException("Invalid columns and values");
+        }
         String sql = buildUpdateStatement(tableName, primaryKey, primaryKeyValue, columnsAndValues);
         List<String> results = new ArrayList<>();
         try (Statement statement = getConnection().createStatement()) {
