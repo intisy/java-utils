@@ -96,7 +96,7 @@ public class SQL implements AutoCloseable {
     }
 
     private boolean isInvalidIdentifier(String identifier) {
-        return identifier == null || !identifier.matches("[A-Za-z0-9_]+");
+        return !identifier.matches("[A-Za-z0-9_-]+");
     }
 
     private String buildDeleteStatement(String tableName, String... whereClause) {
@@ -252,10 +252,7 @@ public class SQL implements AutoCloseable {
 
     private boolean isInvalidIdentifier(Object[] identifier) {
         for (Object object : identifier)
-            if (object == null) {
-                Log.error("Invalid identifier: object is null");
-                return true;
-            } else if (!object.toString().split(" ")[0].matches("[A-Za-z0-9_-]+")) {
+            if (!object.toString().split(" ")[0].matches("[A-Za-z0-9_-]+")) {
                 Log.error("Invalid identifier: " + object.toString().split(" ")[0]);
                 return true;
             }
