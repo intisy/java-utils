@@ -2,6 +2,7 @@ package io.github.intisy.utils.utils;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.google.gson.Strictness;
 import com.google.gson.stream.JsonReader;
 import io.github.intisy.simple.logger.Log;
 
@@ -143,22 +144,18 @@ public class ConnectionUtils {
         }
         String response = read(br);
         JsonReader reader = new JsonReader(new StringReader(response));
-        reader.setLenient(true);
+        reader.setStrictness(Strictness.LENIENT);
+        JsonObject jsonObject;
         try {
-            JsonObject jsonObject = JsonParser.parseReader(reader).getAsJsonObject();
-            if (responseCode != HttpURLConnection.HTTP_OK) {
-                Log.warning(jsonObject.toString());
-                if (jsonObject.get("message").getAsString().equals("Invalid key parameter")) {
-                    Log.error("Invalid API key found.");
-                    //TODO rework login
-                }
-            }
-            br.close();
-            return jsonObject;
+            jsonObject = JsonParser.parseReader(reader).getAsJsonObject();
         } catch (Exception e) {
-            System.err.println("Failed to parse JSON: " + e.getMessage());
-            return new JsonObject();
+            throw new IOException("Failed to parse JSON: " + e.getMessage());
         }
+        if (responseCode != HttpURLConnection.HTTP_OK) {
+            throw new IOException("Response code: " + responseCode + " response: " + jsonObject.toString());
+        }
+        br.close();
+        return jsonObject;
     }
 
     public static String read(BufferedReader br) throws IOException {
