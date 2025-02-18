@@ -228,7 +228,7 @@ public class SQL implements AutoCloseable {
             }
         } catch (SQLException e) {
             if (name != null)
-                logger.error("Failed to " + name + ": " + e.getMessage());
+                logger.error("Failed to " + name + ": " + e.getMessage() + " in " + sql);
             throw new RuntimeException("SQL execution failed", e);
         }
     }
