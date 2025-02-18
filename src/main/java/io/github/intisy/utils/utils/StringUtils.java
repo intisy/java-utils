@@ -97,6 +97,19 @@ public class StringUtils {
         return result;
     }
 
+    public static int nthOccurrence(String str, char target, int n) {
+        int occurrence = 0;
+        for (int i = 0; i < str.length(); i++) {
+            if (str.charAt(i) == target) {
+                occurrence++;
+                if (occurrence == n) {
+                    return i;
+                }
+            }
+        }
+        return -1; // nth occurrence not found
+    }
+
     public static String toTitleCase(String input) {
         if (input == null || input.isEmpty()) {
             return input;
