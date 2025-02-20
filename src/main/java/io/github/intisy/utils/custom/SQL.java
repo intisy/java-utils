@@ -240,9 +240,6 @@ public class SQL implements AutoCloseable {
         if (isInvalidIdentifier(tableName)) {
             throw new IllegalArgumentException("Invalid table name");
         }
-        if (isInvalidIdentifier(columnsAndValues)) {
-            throw new IllegalArgumentException("Invalid columns and values");
-        }
 
         List<String> existing = selectData(tableName, columnsAndValues[0].toString(),
                 columnsAndValues[0].toString(), columnsAndValues[1].toString());
@@ -270,9 +267,6 @@ public class SQL implements AutoCloseable {
         }
         if (isInvalidIdentifier(tableName)) {
             throw new IllegalArgumentException("Invalid table name");
-        }
-        if (isInvalidIdentifier(columnsAndValues)) {
-            throw new IllegalArgumentException("Invalid columns and values");
         }
 
         String sql = buildInsertStatement(tableName, columnsAndValues);
@@ -319,9 +313,6 @@ public class SQL implements AutoCloseable {
         }
         if (isInvalidIdentifier(primaryKeyValue)) {
             throw new IllegalArgumentException("Invalid primary value");
-        }
-        if (isInvalidIdentifier(columnsAndValues)) {
-            throw new IllegalArgumentException("Invalid columns and values");
         }
         String sql = buildUpdateStatement(tableName, primaryKey, primaryKeyValue, columnsAndValues);
         List<String> results = new ArrayList<>();
