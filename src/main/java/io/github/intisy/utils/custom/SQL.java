@@ -254,7 +254,7 @@ public class SQL implements AutoCloseable {
 
     private boolean isInvalidIdentifier(Object[] identifier) {
         for (Object object : identifier)
-            if (isInvalidIdentifier(object)) {
+            if (isInvalidIdentifier(object.toString())) {
                 return true;
             }
         return false;
