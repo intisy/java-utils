@@ -254,8 +254,7 @@ public class SQL implements AutoCloseable {
 
     private boolean isInvalidIdentifier(Object[] identifier) {
         for (Object object : identifier)
-            if (object != null && ((object.toString().contains("'") && !object.toString().split("'")[1].split("'")[0].matches(validCharacters)) || !object.toString().split(" ")[0].matches(validCharacters))) {
-                Log.error("Invalid identifier: " + object.toString().split(" ")[0]);
+            if (isInvalidIdentifier(object)) {
                 return true;
             }
         return false;
@@ -284,9 +283,6 @@ public class SQL implements AutoCloseable {
         }
         if (isInvalidIdentifier(columnToSelect)) {
             throw new IllegalArgumentException("Invalid column to select");
-        }
-        if (isInvalidIdentifier(whereClause)) {
-            throw new IllegalArgumentException("Invalid where clause");
         }
         String sql = buildSelectStatement(tableName, columnToSelect, whereClause);
         List<String> results = new ArrayList<>();
