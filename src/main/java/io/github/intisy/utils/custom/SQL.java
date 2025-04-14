@@ -222,13 +222,13 @@ public class SQL {
         }
     }
 
-    public void createTable(String tableName, String... columnDefs) {
+    public void createTable(String tableName, List<String> columnDefs) {
         createTable(tableName, columnDefs, null);
     }
 
-    public void createTable(String tableName, String[] columnDefs, String[] constraints) {
+    public void createTable(String tableName, List<String> columnDefs, List<String> constraints) {
         validateIdentifier(tableName);
-        if (columnDefs == null || columnDefs.length == 0) {
+        if (columnDefs == null || columnDefs.isEmpty()) {
             throw new IllegalArgumentException("At least one column definition is required.");
         }
         for(String colDef : columnDefs) {
@@ -288,6 +288,103 @@ public class SQL {
         }
     }
 
+    public int upsertData(String tableName, List<String> conflictColumns, Map<String, Object> insertData) throws SQLException {
+        validateIdentifier(tableName);
+        if (conflictColumns == null || conflictColumns.isEmpty()) {
+            throw new IllegalArgumentException("Conflict columns list cannot be null or empty.");
+        }
+        if (insertData == null || insertData.isEmpty()) {
+            throw new IllegalArgumentException("Insert data map cannot be null or empty.");
+        }
+
+        for (String col : conflictColumns) {
+            validateIdentifier(col);
+        }
+        List<String> insertColumns = new ArrayList<>();
+        List<Object> insertValues = new ArrayList<>();
+        for (Map.Entry<String, Object> entry : new LinkedHashMap<>(insertData).entrySet()) {
+            validateIdentifier(entry.getKey());
+            insertColumns.add(quoteIdentifier(entry.getKey()));
+            insertValues.add(entry.getValue());
+        }
+
+        String sql;
+        List<String> updateAssignments = new ArrayList<>();
+
+        switch (databaseType) {
+            case SQLITE:
+                for (String col : insertColumns) {
+                    String unquotedCol = col;
+                    if (col.startsWith("\"") && col.endsWith("\"")) {
+                        unquotedCol = col.substring(1, col.length() - 1);
+                    }
+                    if (!conflictColumns.contains(unquotedCol)) {
+                        updateAssignments.add(col + " = excluded." + col);
+                    }
+                }
+                if (updateAssignments.isEmpty()) {
+                    if (insertColumns.size() == conflictColumns.size()) {
+                        throw new IllegalArgumentException("Upsert requires at least one column to update that is not part of the conflict key.");
+                    } else {
+                        throw new IllegalStateException("Failed to generate update assignments for ON CONFLICT clause.");
+                    }
+                }
+
+                sql = String.format(
+                        "INSERT INTO %s (%s) VALUES (%s) ON CONFLICT (%s) DO UPDATE SET %s",
+                        quoteIdentifier(tableName),                                     // table
+                        String.join(", ", insertColumns),                               // (col1, col2)
+                        String.join(", ", Collections.nCopies(insertColumns.size(), "?")), // (?, ?)
+                        String.join(", ", conflictColumns.stream().map(this::quoteIdentifier).toArray(String[]::new)), // conflict cols (quoted)
+                        String.join(", ", updateAssignments)                            // col = excluded.col, ...
+                );
+                break;
+
+            case MYSQL:
+                for (String col : insertColumns) {
+                    String unquotedCol = col;
+                    if (col.startsWith("`") && col.endsWith("`")) { // Basic unquoting if needed
+                        unquotedCol = col.substring(1, col.length() - 1);
+                    }
+                    if (!conflictColumns.contains(unquotedCol)) {
+                        updateAssignments.add(col + " = VALUES(" + col + ")"); // Use quoted identifier
+                    }
+                }
+                if (updateAssignments.isEmpty()) {
+                    if (insertColumns.size() == conflictColumns.size()) {
+                        throw new IllegalArgumentException("Upsert requires at least one column to update that is not part of the primary/unique key.");
+                    } else {
+                        throw new IllegalStateException("Failed to generate update assignments for ON DUPLICATE KEY UPDATE clause.");
+                    }
+                }
+
+                sql = String.format(
+                        "INSERT INTO %s (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s",
+                        quoteIdentifier(tableName),
+                        String.join(", ", insertColumns),
+                        String.join(", ", Collections.nCopies(insertColumns.size(), "?")),
+                        String.join(", ", updateAssignments)
+                );
+                break;
+
+            default:
+                logger.error("Upsert operation is not supported for database type: " + databaseType);
+                throw new UnsupportedOperationException("Upsert not supported for database type: " + databaseType);
+        }
+
+        logger.debug("Executing upsert: " + sql + " with " + insertValues.size() + " parameters.");
+
+        try (PreparedStatement pstmt = getConnection().prepareStatement(sql)) {
+            bindParameters(pstmt, insertValues);
+            int affectedRows = pstmt.executeUpdate();
+            logger.debug("Upsert successful, " + affectedRows + " row(s) affected.");
+            return affectedRows;
+        } catch (SQLException e) {
+            logger.error("Upsert failed for table '" + tableName + "': " + e.getMessage() + " [SQL: " + sql + "]");
+            throw e;
+        }
+    }
+
     public int insertData(String tableName, Object... columnsAndValues) {
         validateIdentifier(tableName);
         if (columnsAndValues.length == 0) {
@@ -337,7 +434,7 @@ public class SQL {
 
         Map<String, Object> where = new HashMap<>();
         where.put(checkColumn, checkValue);
-        List<Map<String, Object>> existing = selectData(tableName, new String[]{checkColumn}, where);
+        List<Map<String, Object>> existing = selectData(tableName, Collections.singletonList(checkColumn), where);
 
         if (existing.isEmpty()) {
             logger.debug("No existing record found for " + checkColumn + ". Inserting...");
@@ -436,14 +533,14 @@ public class SQL {
         }
     }
 
-    public List<Map<String, Object>> selectData(String tableName, String[] columnsToSelect, Map<String, Object> whereClause) {
+    public List<Map<String, Object>> selectData(String tableName, List<String> columnsToSelect, Map<String, Object> whereClause) {
         validateIdentifier(tableName);
-        if (columnsToSelect == null || columnsToSelect.length == 0) {
+        if (columnsToSelect == null || columnsToSelect.isEmpty()) {
             throw new IllegalArgumentException("Must specify at least one column to select (or '*').");
         }
 
         String selectColsString;
-        if (columnsToSelect.length == 1 && "*".equals(columnsToSelect[0])) {
+        if (columnsToSelect.size() == 1 && "*".equals(columnsToSelect.get(0))) {
             selectColsString = "*";
         } else {
             List<String> quotedCols = new ArrayList<>();
@@ -504,7 +601,7 @@ public class SQL {
         return results;
     }
 
-    public List<Map<String, Object>> selectData(String tableName, String[] columnsToSelect, String whereColumn, Object whereValue) {
+    public List<Map<String, Object>> selectData(String tableName, List<String> columnsToSelect, String whereColumn, Object whereValue) {
         Map<String, Object> whereClause = new LinkedHashMap<>();
         if (whereColumn != null) {
             validateIdentifier(whereColumn);
@@ -516,7 +613,7 @@ public class SQL {
     public <T> List<T> selectSingleColumn(String tableName, String columnToSelect, Map<String, Object> whereClause, Class<T> expectedType) throws SQLException {
         validateIdentifier(columnToSelect);
 
-        List<Map<String, Object>> rawResults = selectData(tableName, new String[]{columnToSelect}, whereClause);
+        List<Map<String, Object>> rawResults = selectData(tableName, Collections.singletonList(columnToSelect), whereClause);
         List<T> results = new ArrayList<>();
 
         for(Map<String, Object> row : rawResults) {
