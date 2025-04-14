@@ -142,7 +142,7 @@ public class SQL {
                 logger.debug("Transaction committed.");
             } catch (SQLException e) {
                 logger.error("Transaction commit failed: " + e.getMessage());
-                throw e;
+                throw new RuntimeException(e);
             } finally {
                 try {
                     conn.setAutoCommit(true);
@@ -164,7 +164,7 @@ public class SQL {
                 logger.warn("Transaction rolled back.");
             } catch (SQLException e) {
                 logger.error("Transaction rollback failed: " + e.getMessage());
-                throw e;
+                throw new RuntimeException(e);
             } finally {
                 try {
                     conn.setAutoCommit(true);
@@ -222,11 +222,11 @@ public class SQL {
         }
     }
 
-    public void createTable(String tableName, String... columnDefs) throws SQLException {
+    public void createTable(String tableName, String... columnDefs) {
         createTable(tableName, columnDefs, null);
     }
 
-    public void createTable(String tableName, String[] columnDefs, String[] constraints) throws SQLException {
+    public void createTable(String tableName, String[] columnDefs, String[] constraints) {
         validateIdentifier(tableName);
         if (columnDefs == null || columnDefs.length == 0) {
             throw new IllegalArgumentException("At least one column definition is required.");
@@ -261,11 +261,11 @@ public class SQL {
             logger.info("Table '" + tableName + "' created or already exists.");
         } catch (SQLException e) {
             logger.error("Failed to create table '" + tableName + "': " + e.getMessage() + " [SQL: " + sqlString + "]");
-            throw e;
+            throw new RuntimeException(e);
         }
     }
 
-    public void deleteTable(String tableName) throws SQLException {
+    public void deleteTable(String tableName) {
         validateIdentifier(tableName);
         String sql = "DROP TABLE IF EXISTS " + quoteIdentifier(tableName);
         logger.warn("Executing DDL (DROP TABLE): " + sql);
@@ -275,11 +275,11 @@ public class SQL {
             logger.info("Table '" + tableName + "' dropped or did not exist.");
         } catch (SQLException e) {
             logger.error("Failed to drop table '" + tableName + "': " + e.getMessage() + " [SQL: " + sql + "]");
-            throw e;
+            throw new RuntimeException(e);
         }
     }
 
-    public int insertData(String tableName, Object... columnsAndValues) throws SQLException {
+    public int insertData(String tableName, Object... columnsAndValues) {
         validateIdentifier(tableName);
         if (columnsAndValues.length == 0) {
             throw new IllegalArgumentException("No column/value pairs provided for insert.");
@@ -310,11 +310,11 @@ public class SQL {
             return affectedRows;
         } catch (SQLException e) {
             logger.error("Insert failed for table '" + tableName + "': " + e.getMessage() + " [SQL: " + sql + "]");
-            throw e;
+            throw new RuntimeException(e);
         }
     }
 
-    public int insertDataIfEmpty(String tableName, Object... columnsAndValues) throws SQLException {
+    public int insertDataIfEmpty(String tableName, Object... columnsAndValues) {
         validateIdentifier(tableName);
         if (columnsAndValues.length < 2) {
             throw new IllegalArgumentException("Must provide at least one column-value pair for checking existence.");
@@ -339,7 +339,7 @@ public class SQL {
         }
     }
 
-    public int updateData(String tableName, Map<String, Object> setClause, Map<String, Object> whereClause) throws SQLException {
+    public int updateData(String tableName, Map<String, Object> setClause, Map<String, Object> whereClause) {
         validateIdentifier(tableName);
         if (setClause == null || setClause.isEmpty()) {
             throw new IllegalArgumentException("SET clause map cannot be null or empty.");
@@ -387,11 +387,11 @@ public class SQL {
             return affectedRows;
         } catch (SQLException e) {
             logger.error("Update failed for table '" + tableName + "': " + e.getMessage() + " [SQL: " + sqlString + "]");
-            throw e;
+            throw new RuntimeException(e);
         }
     }
 
-    public int deleteData(String tableName, Map<String, Object> whereClause) throws SQLException {
+    public int deleteData(String tableName, Map<String, Object> whereClause) {
         validateIdentifier(tableName);
         if (whereClause == null) {
             whereClause = Collections.emptyMap();
@@ -423,11 +423,11 @@ public class SQL {
             return affectedRows;
         } catch (SQLException e) {
             logger.error("Delete failed for table '" + tableName + "': " + e.getMessage() + " [SQL: " + sqlString + "]");
-            throw e;
+            throw new RuntimeException(e);
         }
     }
 
-    public List<Map<String, Object>> selectData(String tableName, String[] columnsToSelect, Map<String, Object> whereClause) throws SQLException {
+    public List<Map<String, Object>> selectData(String tableName, String[] columnsToSelect, Map<String, Object> whereClause) {
         validateIdentifier(tableName);
         if (columnsToSelect == null || columnsToSelect.length == 0) {
             throw new IllegalArgumentException("Must specify at least one column to select (or '*').");
@@ -489,13 +489,13 @@ public class SQL {
             }
         } catch (SQLException e) {
             logger.error("Select failed for table '" + tableName + "': " + e.getMessage() + " [SQL: " + sqlString + "]");
-            throw e;
+            throw new RuntimeException(e);
         }
         logger.debug("Select executed, " + results.size() + " row(s) returned.");
         return results;
     }
 
-    public List<Map<String, Object>> selectData(String tableName, String[] columnsToSelect, String whereColumn, Object whereValue) throws SQLException {
+    public List<Map<String, Object>> selectData(String tableName, String[] columnsToSelect, String whereColumn, Object whereValue) {
         Map<String, Object> whereClause = new LinkedHashMap<>();
         if (whereColumn != null) {
             validateIdentifier(whereColumn);
@@ -675,7 +675,7 @@ public class SQL {
             }
         } catch (SQLException e) {
             logger.error("Failed to list tables: " + e.getMessage());
-            throw e;
+            throw new RuntimeException(e);
         }
         logger.info("--- Finished Logging Database ---");
     }
@@ -700,12 +700,12 @@ public class SQL {
             }
         } catch (SQLException e) {
             logger.error("Failed to get columns for table '" + tableName + "': " + e.getMessage());
-            throw e;
+            throw new RuntimeException(e);
         }
         return columns;
     }
 
-    private void logTableContents(String tableName, List<String> columns) throws SQLException {
+    private void logTableContents(String tableName, List<String> columns) {
         List<List<String>> rows = new ArrayList<>();
         int[] columnWidths = new int[columns.size()];
         for (int i = 0; i < columns.size(); i++) {
@@ -728,7 +728,7 @@ public class SQL {
             }
         } catch (SQLException e) {
             logger.error("Failed to retrieve contents for table '" + tableName + "': " + e.getMessage() + " [SQL: " + sql + "]");
-            throw e;
+            throw new RuntimeException(e);
         }
 
         StringBuilder headerBuilder = new StringBuilder("|");
