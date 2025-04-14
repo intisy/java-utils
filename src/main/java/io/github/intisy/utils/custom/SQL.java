@@ -279,6 +279,15 @@ public class SQL {
         }
     }
 
+    public void execute(String sql) {
+        logger.warn("Executing raw command: " + sql);
+        try (Statement statement = getConnection().createStatement()) {
+            statement.execute(sql);
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     public int insertData(String tableName, Object... columnsAndValues) {
         validateIdentifier(tableName);
         if (columnsAndValues.length == 0) {
