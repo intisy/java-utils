@@ -288,7 +288,7 @@ public class SQL {
         }
     }
 
-    public int upsertData(String tableName, List<String> conflictColumns, Map<String, Object> insertData) throws SQLException {
+    public int upsertData(String tableName, List<String> conflictColumns, Map<String, Object> insertData) {
         validateIdentifier(tableName);
         if (conflictColumns == null || conflictColumns.isEmpty()) {
             throw new IllegalArgumentException("Conflict columns list cannot be null or empty.");
@@ -381,7 +381,7 @@ public class SQL {
             return affectedRows;
         } catch (SQLException e) {
             logger.error("Upsert failed for table '" + tableName + "': " + e.getMessage() + " [SQL: " + sql + "]");
-            throw e;
+            throw new RuntimeException(e);
         }
     }
 
