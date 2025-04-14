@@ -8,7 +8,7 @@ import java.util.*;
 import java.util.regex.Pattern;
 
 @SuppressWarnings({"unused", "SqlNoDataSourceInspection", "SqlSourceToSinkFlow"})
-public class SQL implements AutoCloseable {
+public class SQL {
 
     private static final Pattern VALID_IDENTIFIER_PATTERN = Pattern.compile("^[A-Za-z_][A-Za-z0-9_]*$");
     private static final int MAX_IDENTIFIER_LENGTH = 64;
@@ -27,12 +27,12 @@ public class SQL implements AutoCloseable {
         UNKNOWN
     }
 
-    public SQL(String dbFilePath) throws SQLException {
+    public SQL(String dbFilePath) {
         this("jdbc:sqlite:" + requireNonNull(dbFilePath, "dbFilePath cannot be null"),
                 null, null, new EmptyLogger());
     }
 
-    public SQL(String host, int port, String database, String username, String password) throws SQLException {
+    public SQL(String host, int port, String database, String username, String password) {
         this(String.format("jdbc:mysql://%s:%d/%s",
                         requireNonNull(host, "host cannot be null"),
                         port,
@@ -42,7 +42,7 @@ public class SQL implements AutoCloseable {
                 new EmptyLogger());
     }
 
-    public SQL(String jdbcUrl, String username, String password, SimpleLogger logger) throws SQLException {
+    public SQL(String jdbcUrl, String username, String password, SimpleLogger logger) {
         this.url = requireNonNull(jdbcUrl, "jdbcUrl cannot be null");
         this.username = username;
         this.password = password;
@@ -89,7 +89,7 @@ public class SQL implements AutoCloseable {
         return DatabaseType.UNKNOWN;
     }
 
-    private Connection initializeConnection() throws SQLException {
+    private Connection initializeConnection() {
         try {
             Connection conn;
             if (username != null && password != null) {
@@ -110,7 +110,7 @@ public class SQL implements AutoCloseable {
             return conn;
         } catch (SQLException e) {
             logger.error("Failed to initialize database connection (" + url + "): " + e.getMessage());
-            throw e;
+            throw new RuntimeException(e);
         }
     }
 
@@ -177,7 +177,6 @@ public class SQL implements AutoCloseable {
         }
     }
 
-    @Override
     public void close() {
         if (connection != null) {
             try {
