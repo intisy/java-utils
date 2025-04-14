@@ -768,16 +768,18 @@ public class SQL {
         }
     }
 
-    public void logDatabase() throws SQLException {
+    public void logDatabase() {
         logger.info("--- Logging Database Schema and Content (" + url + ") ---");
-        DatabaseMetaData metaData = getConnection().getMetaData();
-        String catalog = getConnection().getCatalog();
-        String schemaPattern = (databaseType == DatabaseType.MYSQL) ? catalog : null;
+        try {
+            DatabaseMetaData metaData = getConnection().getMetaData();
+            String catalog = getConnection().getCatalog();
+            String schemaPattern = (databaseType == DatabaseType.MYSQL) ? catalog : null;
 
-        try (ResultSet tables = metaData.getTables(catalog, schemaPattern, "%", new String[]{"TABLE"})) {
-            while (tables.next()) {
-                String tableName = tables.getString("TABLE_NAME");
-                logTable(tableName, metaData);
+            try (ResultSet tables = metaData.getTables(catalog, schemaPattern, "%", new String[]{"TABLE"})) {
+                while (tables.next()) {
+                    String tableName = tables.getString("TABLE_NAME");
+                    logTable(tableName, metaData);
+                }
             }
         } catch (SQLException e) {
             logger.error("Failed to list tables: " + e.getMessage());
