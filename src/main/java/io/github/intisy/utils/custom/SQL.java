@@ -3,6 +3,7 @@ package io.github.intisy.utils.custom;
 import io.github.intisy.simple.logger.EmptyLogger;
 import io.github.intisy.simple.logger.SimpleLogger;
 
+import java.io.File;
 import java.sql.*;
 import java.util.*;
 import java.util.regex.Pattern;
@@ -27,8 +28,8 @@ public class SQL {
         UNKNOWN
     }
 
-    public SQL(String dbFilePath) {
-        this("jdbc:sqlite:" + requireNonNull(dbFilePath, "dbFilePath cannot be null"),
+    public SQL(File dbFile) {
+        this("jdbc:sqlite:" + requireNonNull(dbFile.getAbsolutePath(), "dbFilePath cannot be null"),
                 null, null, new EmptyLogger());
     }
 
