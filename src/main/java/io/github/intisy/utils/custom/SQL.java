@@ -279,13 +279,28 @@ public class SQL {
         }
     }
 
-    public void execute(String sql) {
+    public void executeQuery(String sql) {
         logger.warn("Executing raw command: " + sql);
         try (Statement statement = getConnection().createStatement()) {
             statement.execute(sql);
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    public void executeQuery(String sql, List<?> params) {
+        logger.warn("Executing parameterized query: " + sql);
+        try (PreparedStatement pstmt = getConnection().prepareStatement(sql)) {
+            bindParameters(pstmt, params);
+            pstmt.execute();
+        } catch (SQLException e) {
+            logger.error("Query failed: " + e.getMessage() + " [SQL: " + sql + "]");
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void executeQuery(String sql, Object... params) {
+        executeQuery(sql, Arrays.asList(params));
     }
 
     public int upsertData(String tableName, List<String> conflictColumns, Map<String, Object> insertData) {
@@ -757,7 +772,7 @@ public class SQL {
         return "INSERT INTO " + quoteIdentifier(tableName) + " (" + cols + ") VALUES (" + placeholders + ")";
     }
 
-    private void bindParameters(PreparedStatement pstmt, List<Object> params) throws SQLException {
+    private void bindParameters(PreparedStatement pstmt, List<?> params) throws SQLException {
         for (int i = 0; i < params.size(); i++) {
             Object param = params.get(i);
             if (param == null) {
