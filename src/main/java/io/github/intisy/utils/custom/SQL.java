@@ -279,28 +279,99 @@ public class SQL {
         }
     }
 
-    public void executeQuery(String sql) {
-        logger.warn("Executing raw command: " + sql);
-        try (Statement statement = getConnection().createStatement()) {
-            statement.execute(sql);
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    public void executeQuery(String sql, List<?> params) {
-        logger.warn("Executing parameterized query: " + sql);
-        try (PreparedStatement pstmt = getConnection().prepareStatement(sql)) {
-            bindParameters(pstmt, params);
-            pstmt.execute();
+    public List<Map<String, Object>> executeQuery(String sql) {
+        logger.warn("Executing raw query: " + sql);
+        List<Map<String, Object>> results = new ArrayList<>();
+        
+        try (Statement stmt = getConnection().createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+            
+            ResultSetMetaData metaData = rs.getMetaData();
+            int columnCount = metaData.getColumnCount();
+            
+            while (rs.next()) {
+                Map<String, Object> row = new LinkedHashMap<>();
+                for (int i = 1; i <= columnCount; i++) {
+                    String colName = metaData.getColumnLabel(i);
+                    if (colName == null || colName.isEmpty()) {
+                        colName = metaData.getColumnName(i);
+                    }
+                    row.put(colName, rs.getObject(i));
+                }
+                results.add(row);
+            }
+            
+            logger.debug("Query returned " + results.size() + " rows");
+            return results;
         } catch (SQLException e) {
             logger.error("Query failed: " + e.getMessage() + " [SQL: " + sql + "]");
             throw new RuntimeException(e);
         }
     }
 
-    public void executeQuery(String sql, Object... params) {
-        executeQuery(sql, Arrays.asList(params));
+    public List<Map<String, Object>> executeQuery(String sql, List<?> params) {
+        logger.warn("Executing parameterized query: " + sql);
+        List<Map<String, Object>> results = new ArrayList<>();
+        
+        try (PreparedStatement pstmt = getConnection().prepareStatement(sql)) {
+            bindParameters(pstmt, params);
+            
+            try (ResultSet rs = pstmt.executeQuery()) {
+                ResultSetMetaData metaData = rs.getMetaData();
+                int columnCount = metaData.getColumnCount();
+                
+                while (rs.next()) {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    for (int i = 1; i <= columnCount; i++) {
+                        String colName = metaData.getColumnLabel(i);
+                        if (colName == null || colName.isEmpty()) {
+                            colName = metaData.getColumnName(i);
+                        }
+                        row.put(colName, rs.getObject(i));
+                    }
+                    results.add(row);
+                }
+            }
+            
+            logger.debug("Query returned " + results.size() + " rows");
+            return results;
+        } catch (SQLException e) {
+            logger.error("Query failed: " + e.getMessage() + " [SQL: " + sql + "]");
+            throw new RuntimeException(e);
+        }
+    }
+
+    public List<Map<String, Object>> executeQuery(String sql, Object... params) {
+        return executeQuery(sql, Arrays.asList(params));
+    }
+
+    public int executeUpdate(String sql) {
+        logger.warn("Executing update: " + sql);
+        try (Statement stmt = getConnection().createStatement()) {
+            int affected = stmt.executeUpdate(sql);
+            logger.debug("Update affected " + affected + " rows");
+            return affected;
+        } catch (SQLException e) {
+            logger.error("Update failed: " + e.getMessage() + " [SQL: " + sql + "]");
+            throw new RuntimeException(e);
+        }
+    }
+
+    public int executeUpdate(String sql, List<?> params) {
+        logger.warn("Executing parameterized update: " + sql);
+        try (PreparedStatement pstmt = getConnection().prepareStatement(sql)) {
+            bindParameters(pstmt, params);
+            int affected = pstmt.executeUpdate();
+            logger.debug("Update affected " + affected + " rows");
+            return affected;
+        } catch (SQLException e) {
+            logger.error("Update failed: " + e.getMessage() + " [SQL: " + sql + "]");
+            throw new RuntimeException(e);
+        }
+    }
+
+    public int executeUpdate(String sql, Object... params) {
+        return executeUpdate(sql, Arrays.asList(params));
     }
 
     public int upsertData(String tableName, List<String> conflictColumns, Map<String, Object> insertData) {
@@ -347,22 +418,22 @@ public class SQL {
 
                 sql = String.format(
                         "INSERT INTO %s (%s) VALUES (%s) ON CONFLICT (%s) DO UPDATE SET %s",
-                        quoteIdentifier(tableName),                                     // table
-                        String.join(", ", insertColumns),                               // (col1, col2)
-                        String.join(", ", Collections.nCopies(insertColumns.size(), "?")), // (?, ?)
-                        String.join(", ", conflictColumns.stream().map(this::quoteIdentifier).toArray(String[]::new)), // conflict cols (quoted)
-                        String.join(", ", updateAssignments)                            // col = excluded.col, ...
+                        quoteIdentifier(tableName),
+                        String.join(", ", insertColumns),
+                        String.join(", ", Collections.nCopies(insertColumns.size(), "?")),
+                        String.join(", ", conflictColumns.stream().map(this::quoteIdentifier).toArray(String[]::new)),
+                        String.join(", ", updateAssignments)
                 );
                 break;
 
             case MYSQL:
                 for (String col : insertColumns) {
                     String unquotedCol = col;
-                    if (col.startsWith("`") && col.endsWith("`")) { // Basic unquoting if needed
+                    if (col.startsWith("`") && col.endsWith("`")) {
                         unquotedCol = col.substring(1, col.length() - 1);
                     }
                     if (!conflictColumns.contains(unquotedCol)) {
-                        updateAssignments.add(col + " = VALUES(" + col + ")"); // Use quoted identifier
+                        updateAssignments.add(col + " = VALUES(" + col + ")");
                     }
                 }
                 if (updateAssignments.isEmpty()) {
@@ -449,7 +520,6 @@ public class SQL {
         return insertData(tableName, insertData);
     }
 
-    // Helper method using MapUtils
     public int insertData(String tableName, LinkedHashMap<String, Object> insertData) {
         return insertData(tableName, (Map<String, Object>) insertData);
     }
@@ -941,6 +1011,51 @@ public class SQL {
             }
         } catch (SQLException e) {
             logger.error("Failed to check if table '" + tableName + "' exists: " + e.getMessage());
+            throw new RuntimeException(e);
+        }
+    }
+
+    public long count(String tableName) {
+        return count(tableName, null);
+    }
+
+    public long count(String tableName, Map<String, Object> whereClause) {
+        validateIdentifier(tableName);
+        
+        StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM ")
+            .append(quoteIdentifier(tableName));
+        
+        List<Object> whereValues = new ArrayList<>();
+        if (whereClause != null && !whereClause.isEmpty()) {
+            List<String> whereConditions = new ArrayList<>();
+            for (Map.Entry<String, Object> entry : whereClause.entrySet()) {
+                validateIdentifier(entry.getKey());
+                whereConditions.add(quoteIdentifier(entry.getKey()) + 
+                    (entry.getValue() == null ? " IS ?" : " = ?"));
+                whereValues.add(entry.getValue());
+            }
+            sql.append(" WHERE ").append(String.join(" AND ", whereConditions));
+        }
+
+        String sqlString = sql.toString();
+        logger.debug("Executing count: " + sqlString);
+
+        try (PreparedStatement pstmt = getConnection().prepareStatement(sqlString)) {
+            if (!whereValues.isEmpty()) {
+                bindParameters(pstmt, whereValues);
+            }
+            
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    long count = rs.getLong(1);
+                    logger.debug("Count returned: " + count);
+                    return count;
+                }
+                return 0;
+            }
+        } catch (SQLException e) {
+            logger.error("Count failed for table '" + tableName + "': " + 
+                e.getMessage() + " [SQL: " + sqlString + "]");
             throw new RuntimeException(e);
         }
     }
