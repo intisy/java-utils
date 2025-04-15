@@ -920,4 +920,28 @@ public class SQL {
         }
         return sb.toString();
     }
+
+    public boolean tableExists(String tableName) {
+        validateIdentifier(tableName);
+        
+        try {
+            DatabaseMetaData metaData = getConnection().getMetaData();
+            String catalog = getConnection().getCatalog();
+            String schemaPattern = (databaseType == DatabaseType.MYSQL) ? catalog : null;
+            
+            try (ResultSet tables = metaData.getTables(
+                    catalog, 
+                    schemaPattern, 
+                    tableName, 
+                    new String[]{"TABLE"})) {
+                
+                boolean exists = tables.next();
+                logger.debug("Table '" + tableName + "' " + (exists ? "exists" : "does not exist"));
+                return exists;
+            }
+        } catch (SQLException e) {
+            logger.error("Failed to check if table '" + tableName + "' exists: " + e.getMessage());
+            throw new RuntimeException(e);
+        }
+    }
 }
