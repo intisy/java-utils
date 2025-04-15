@@ -400,25 +400,18 @@ public class SQL {
         }
     }
 
-    public int insertData(String tableName, Object... columnsAndValues) {
+    public int insertData(String tableName, Map<String, Object> insertData) {
         validateIdentifier(tableName);
-        if (columnsAndValues.length == 0) {
-            throw new IllegalArgumentException("No column/value pairs provided for insert.");
-        }
-        if (columnsAndValues.length % 2 != 0) {
-            throw new IllegalArgumentException("Columns and values must be provided in pairs.");
+        if (insertData == null || insertData.isEmpty()) {
+            throw new IllegalArgumentException("Insert data map cannot be null or empty.");
         }
 
         List<String> columns = new ArrayList<>();
         List<Object> values = new ArrayList<>();
-        for (int i = 0; i < columnsAndValues.length; i += 2) {
-            if (!(columnsAndValues[i] instanceof String)) {
-                throw new IllegalArgumentException("Column name at index " + i + " must be a String.");
-            }
-            String colName = (String) columnsAndValues[i];
-            validateIdentifier(colName);
-            columns.add(quoteIdentifier(colName));
-            values.add(columnsAndValues[i + 1]);
+        for (Map.Entry<String, Object> entry : new LinkedHashMap<>(insertData).entrySet()) {
+            validateIdentifier(entry.getKey());
+            columns.add(quoteIdentifier(entry.getKey()));
+            values.add(entry.getValue());
         }
 
         String sql = buildInsertStatement(tableName, columns);
@@ -433,6 +426,32 @@ public class SQL {
             logger.error("Insert failed for table '" + tableName + "': " + e.getMessage() + " [SQL: " + sql + "]");
             throw new RuntimeException(e);
         }
+    }
+
+    public int insertData(String tableName, Object... columnsAndValues) {
+        if (columnsAndValues.length == 0) {
+            throw new IllegalArgumentException("No column/value pairs provided for insert.");
+        }
+        if (columnsAndValues.length % 2 != 0) {
+            throw new IllegalArgumentException("Columns and values must be provided in pairs.");
+        }
+
+        Map<String, Object> insertData = new LinkedHashMap<>();
+        for (int i = 0; i < columnsAndValues.length; i += 2) {
+            if (!(columnsAndValues[i] instanceof String)) {
+                throw new IllegalArgumentException("Column name at index " + i + " must be a String.");
+            }
+            String colName = (String) columnsAndValues[i];
+            Object value = columnsAndValues[i + 1];
+            insertData.put(colName, value);
+        }
+
+        return insertData(tableName, insertData);
+    }
+
+    // Helper method using MapUtils
+    public int insertData(String tableName, LinkedHashMap<String, Object> insertData) {
+        return insertData(tableName, (Map<String, Object>) insertData);
     }
 
     public int insertDataIfEmpty(String tableName, Object... columnsAndValues) {
