@@ -1,4 +1,4 @@
-package io.github.intisy.utils.custom;
+package io.github.intisy.utils.custom.external;
 
 import org.kohsuke.github.GHAsset;
 

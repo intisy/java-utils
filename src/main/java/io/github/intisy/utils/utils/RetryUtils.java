@@ -1,9 +1,8 @@
-package io.github.intisy.utils.custom;
+package io.github.intisy.utils.utils;
 
 import io.github.intisy.simple.logger.Log;
-import io.github.intisy.utils.utils.ThreadUtils;
 
-public class Retry {
+public class RetryUtils {
     public static void run(Retryable retryable) {
         run(0, retryable);
     }
