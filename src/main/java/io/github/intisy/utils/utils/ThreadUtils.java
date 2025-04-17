@@ -15,6 +15,18 @@ public class ThreadUtils {
         }
     }
 
+    public static void newThread(Runnable runnable) {
+        new Thread(runnable).start();
+    }
+    public static void newThread(Runnable runnable, String name) {
+        new Thread(runnable, name).start();
+    }
+    public static void newThread(Runnable runnable, String name, boolean daemon) {
+        Thread thread = new Thread(runnable, name);
+        thread.setDaemon(daemon);
+        thread.start();
+    }
+
     public static String getThreadName() {
         return Thread.currentThread().getName();
     }
