@@ -1,4 +1,4 @@
-package io.github.intisy.utils.custom;
+package io.github.intisy.utils.custom.external;
 
 import org.apache.http.client.methods.HttpEntityEnclosingRequestBase;
 import java.net.URI;

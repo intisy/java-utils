@@ -1,4 +1,4 @@
-package io.github.intisy.utils.custom;
+package io.github.intisy.utils.custom.external;
 
 import io.github.intisy.simple.logger.EmptyLogger;
 import io.github.intisy.simple.logger.SimpleLogger;
