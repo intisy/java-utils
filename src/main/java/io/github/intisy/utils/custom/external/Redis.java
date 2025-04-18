@@ -31,14 +31,14 @@ public class Redis {
 
     private final String host;
     private final int port;
-    private final boolean useEmbedded;
-    private final boolean allowPortSearch;
-    private final boolean allowMockFallback;
     private JedisPool jedisPool;
     private SimpleLogger logger;
-    private boolean connected = false;
+    private boolean connected;
     private RedisServer embeddedServer;
-    private boolean useMockFallback = false;
+    private final boolean allowPortSearch;
+    private final boolean allowMockFallback;
+    private boolean useEmbedded;
+    private boolean useMockFallback;
     private MockRedis mockRedis;
 
     public Redis() {
@@ -482,6 +482,13 @@ public class Redis {
         dataListeners.remove(listener);
     }
 
+    public void setUseMockFallback(boolean useMockFallback) {
+        this.useMockFallback = useMockFallback;
+    }
+
+    public void setUseEmbedded(boolean useEmbedded) {
+        this.useEmbedded = useEmbedded;
+    }
 
     public static class MockRedis extends Redis {
         private final Map<String, String> dataStore = new HashMap<>();
