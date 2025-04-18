@@ -61,7 +61,7 @@ public class Redis {
         this.useEmbedded = useEmbedded;
     }
 
-    private boolean isPortAvailable(int port) {
+    public boolean isPortAvailable(int port) {
         try (ServerSocket serverSocket = new ServerSocket(port)) {
             return true;
         } catch (IOException e) {

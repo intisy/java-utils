@@ -28,7 +28,8 @@ public class TestRedis {
 
         try {
             System.out.println("Attempting to connect to embedded Redis server...");
-            redis.connect();
+            if (redis.isPortAvailable(redis.getPort()))
+                redis.connect();
 
             if (redis.isConnected()) {
                 System.out.println("Embedded Redis server is running");
