@@ -2,6 +2,7 @@ package io.github.intisy.utils.custom.external;
 
 import io.github.intisy.simple.logger.EmptyLogger;
 import io.github.intisy.simple.logger.SimpleLogger;
+import redis.clients.jedis.JedisPubSub;
 import redis.embedded.RedisServer;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
