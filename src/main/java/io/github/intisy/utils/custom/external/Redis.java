@@ -2,11 +2,9 @@ package io.github.intisy.utils.custom.external;
 
 import io.github.intisy.simple.logger.EmptyLogger;
 import io.github.intisy.simple.logger.SimpleLogger;
-import redis.clients.jedis.JedisPubSub;
+import io.github.intisy.utils.utils.MapUtils;
+import redis.clients.jedis.*;
 import redis.embedded.RedisServer;
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisPool;
-import redis.clients.jedis.JedisPoolConfig;
 import redis.clients.jedis.exceptions.JedisConnectionException;
 
 import java.io.IOException;
@@ -14,6 +12,7 @@ import java.net.ServerSocket;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 @SuppressWarnings("unused")
@@ -660,5 +659,137 @@ public class Redis {
             subscribers.computeIfAbsent(channel, k -> new CopyOnWriteArrayList<>())
                       .add(messageListener);
         }
+    }
+
+    public Map<String, String> getDebugInfo() {
+        if (useMockFallback) {
+            Map<String, String> mockInfo = new HashMap<>();
+            mockInfo.put("type", "mock");
+            mockInfo.put("status", mockRedis.isRunning() ? "running" : "stopped");
+            mockInfo.put("dataStoreSize", String.valueOf(mockRedis.dataStore.size()));
+            mockInfo.put("subscribersCount", String.valueOf(mockRedis.subscribers.size()));
+            return mockInfo;
+        }
+
+        if (!isConnected()) {
+            Map<String, String> disconnectedInfo = new HashMap<>();
+            disconnectedInfo.put("status", "disconnected");
+            disconnectedInfo.put("host", host);
+            disconnectedInfo.put("port", String.valueOf(port));
+            return disconnectedInfo;
+        }
+
+        try (Jedis jedis = jedisPool.getResource()) {
+            Map<String, String> info = new HashMap<>();
+            info.put("type", useEmbedded ? "embedded" : "external");
+            info.put("status", "connected");
+            info.put("host", host);
+            info.put("port", String.valueOf(port));
+            info.put("clientList", getClientList());
+            info.put("dbSize", String.valueOf(jedis.dbSize()));
+            info.put("serverInfo", jedis.info());
+            info.put("activeListeners", String.valueOf(dataListeners.size()));
+            return info;
+        } catch (Exception e) {
+            logger.error("Error getting debug info", e);
+            return MapUtils.newHashMap("error", e.getMessage());
+        }
+    }
+
+    public String getClientList() {
+        if (useMockFallback) {
+            return "Mock Redis - no real clients";
+        }
+
+        if (!isConnected()) {
+            return "Not connected to Redis server";
+        }
+
+        try (Jedis jedis = jedisPool.getResource()) {
+            return jedis.clientList();
+        } catch (Exception e) {
+            logger.error("Error getting client list", e);
+            return "Error: " + e.getMessage();
+        }
+    }
+
+    public void printDebugStatus() {
+        Map<String, String> debugInfo = getDebugInfo();
+        logger.note("=== Redis Debug Status ===");
+        debugInfo.forEach((key, value) -> {
+            if (key.equals("serverInfo")) {
+                logger.note("Server Info:");
+                String[] infoLines = value.split("\n");
+                for (String line : infoLines) {
+                    if (!line.trim().isEmpty()) {
+                        logger.note("  " + line);
+                    }
+                }
+            } else {
+                logger.note(key + ": " + value);
+            }
+        });
+        logger.note("======================");
+    }
+
+    public Map<String, Long> getKeyspaceStats() {
+        if (useMockFallback) {
+            return MapUtils.newHashMap("total_keys", (long) mockRedis.dataStore.size());
+        }
+
+        if (!isConnected()) {
+            return MapUtils.newHashMap("error", -1L);
+        }
+
+        try (Jedis jedis = jedisPool.getResource()) {
+            Map<String, Long> stats = new HashMap<>();
+            stats.put("total_keys", jedis.dbSize());
+            
+            // Get key patterns statistics
+            Set<String> keys = jedis.keys("*");
+            stats.put("string_keys", keys.stream()
+                .filter(k -> jedis.type(k).equals("string"))
+                .count());
+            stats.put("list_keys", keys.stream()
+                .filter(k -> jedis.type(k).equals("list"))
+                .count());
+            stats.put("set_keys", keys.stream()
+                .filter(k -> jedis.type(k).equals("set"))
+                .count());
+            stats.put("hash_keys", keys.stream()
+                .filter(k -> jedis.type(k).equals("hash"))
+                .count());
+            
+            return stats;
+        } catch (Exception e) {
+            logger.error("Error getting keyspace stats", e);
+            return MapUtils.newHashMap("error", -1L);
+        }
+    }
+
+    public void monitorCommands() {
+        if (useMockFallback) {
+            logger.note("Command monitoring not available in mock mode");
+            return;
+        }
+
+        if (!isConnected()) {
+            logger.error("Not connected to Redis server. Cannot monitor commands.");
+            return;
+        }
+
+        new Thread(() -> {
+            try (Jedis jedis = jedisPool.getResource()) {
+                logger.note("Starting Redis command monitor...");
+                jedis.monitor(new JedisMonitor() {
+                    @Override
+                    public void onCommand(String command) {
+                        logger.note("Redis Command: " + command);
+                    }
+                });
+            } catch (Exception e) {
+                logger.error("Error in command monitor", e);
+            }
+        }, "Redis-Monitor").start();
     }
 }
