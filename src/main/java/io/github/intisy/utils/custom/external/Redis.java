@@ -489,9 +489,63 @@ public class Redis {
         this.useEmbedded = useEmbedded;
     }
 
+    public void publish(String channel, String message) {
+        if (useMockFallback) {
+            mockRedis.publish(channel, message);
+            return;
+        }
+
+        if (!isConnected()) {
+            logger.error("Not connected to Redis server. Cannot publish message.");
+            return;
+        }
+
+        try (Jedis jedis = jedisPool.getResource()) {
+            jedis.publish(channel, message);
+        } catch (JedisConnectionException e) {
+            logger.error("Jedis connection error during PUBLISH operation", e);
+            connected = false;
+        } catch (Exception e) {
+            logger.error("Error publishing message to Redis", e);
+        }
+    }
+
+    public void subscribe(String channel, MessageListener messageListener) {
+        if (useMockFallback) {
+            mockRedis.subscribe(channel, messageListener);
+            return;
+        }
+
+        if (!isConnected()) {
+            logger.error("Not connected to Redis server. Cannot subscribe to channel.");
+            return;
+        }
+
+        new Thread(() -> {
+            try (Jedis jedis = jedisPool.getResource()) {
+                jedis.subscribe(new JedisPubSub() {
+                    @Override
+                    public void onMessage(String channel, String message) {
+                        messageListener.onMessage(channel, message);
+                    }
+                }, channel);
+            } catch (JedisConnectionException e) {
+                logger.error("Jedis connection error during SUBSCRIBE operation", e);
+                connected = false;
+            } catch (Exception e) {
+                logger.error("Error subscribing to Redis channel", e);
+            }
+        }, "Redis-Subscriber-" + channel).start();
+    }
+
+    public interface MessageListener {
+        void onMessage(String channel, String message);
+    }
+
     public static class MockRedis extends Redis {
         private final Map<String, String> dataStore = new HashMap<>();
         private boolean running = false;
+        private final Map<String, List<MessageListener>> subscribers = new HashMap<>();
 
         public MockRedis() {
             super("mock", 0);
@@ -580,6 +634,30 @@ public class Redis {
         @Override
         public void disconnect() {
             stopServer();
+        }
+
+        public void publish(String channel, String message) {
+            if (!isRunning()) {
+                getLogger().error("Mock Redis server is not running. Cannot publish message.");
+                return;
+            }
+
+            List<MessageListener> channelSubscribers = subscribers.get(channel);
+            if (channelSubscribers != null) {
+                for (MessageListener listener : channelSubscribers) {
+                    listener.onMessage(channel, message);
+                }
+            }
+        }
+
+        public void subscribe(String channel, MessageListener messageListener) {
+            if (!isRunning()) {
+                getLogger().error("Mock Redis server is not running. Cannot subscribe to channel.");
+                return;
+            }
+
+            subscribers.computeIfAbsent(channel, k -> new CopyOnWriteArrayList<>())
+                      .add(messageListener);
         }
     }
 }
