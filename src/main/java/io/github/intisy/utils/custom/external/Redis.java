@@ -109,7 +109,7 @@ public class Redis {
                 startEmbeddedServer();
             } catch (IOException e) {
                 if (!allowMockFallback) {
-                    logger.error("Failed to start embedded Redis server and mock fallback is disabled.", e);
+                    logger.warn("Failed to start embedded Redis server and mock fallback is disabled.");
                     throw e;
                 }
                 
