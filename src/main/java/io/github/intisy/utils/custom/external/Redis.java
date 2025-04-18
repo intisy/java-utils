@@ -109,7 +109,6 @@ public class Redis {
                 startEmbeddedServer();
             } catch (IOException e) {
                 if (!allowMockFallback) {
-                    logger.warn("Failed to start embedded Redis server and mock fallback is disabled.");
                     throw e;
                 }
                 
@@ -188,7 +187,7 @@ public class Redis {
 
             if (!isPortAvailable(serverPort)) {
                 if (!allowPortSearch) {
-                    logger.error("Port " + serverPort + " is not available for embedded Redis server and port search is disabled");
+                    logger.warn("Port " + serverPort + " is not available for embedded Redis server and port search is disabled");
                     throw new IOException("Specified port " + serverPort + " is not available and port search is disabled");
                 }
                 
@@ -212,7 +211,7 @@ public class Redis {
                 embeddedServer.start();
                 logger.note("Embedded Redis server started on port: " + serverPort);
             } catch (IOException e) {
-                logger.error("Failed to start embedded Redis server on port " + serverPort + ": " + e.getMessage(), e);
+                logger.error("Failed to start embedded Redis server on port " + serverPort + ": " + e.getMessage());
                 stopEmbeddedServer();
                 throw e;
             } catch (Exception e) {
