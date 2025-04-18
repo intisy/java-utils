@@ -9,6 +9,7 @@ import redis.clients.jedis.exceptions.JedisConnectionException;
 
 import java.io.IOException;
 import java.net.ServerSocket;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -141,7 +142,7 @@ public class Redis {
                 poolConfig.setTestOnReturn(true);
                 poolConfig.setTestWhileIdle(true);
                 poolConfig.setBlockWhenExhausted(true);
-                poolConfig.setMaxWaitMillis(10000);
+                poolConfig.setMaxWait(Duration.ofMillis(10000));
 
                 String connectHost = host;
                 int connectPort = port;
@@ -428,7 +429,7 @@ public class Redis {
         }
     }
 
-    public String setDataWithExpiry(String key, String value, int seconds) {
+    public String setDataWithExpiry(String key, String value, long seconds) {
         if (useMockFallback) {
             return mockRedis.setDataWithExpiry(key, value, seconds);
         }
@@ -611,7 +612,7 @@ public class Redis {
         }
 
         @Override
-        public String setDataWithExpiry(String key, String value, int seconds) {
+        public String setDataWithExpiry(String key, String value, long seconds) {
             if (!isRunning()) {
                 getLogger().error("Mock Redis server is not running. Cannot set data with expiry.");
                 return null;
