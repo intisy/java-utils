@@ -24,12 +24,16 @@ public class Redis {
 
     private final List<RedisDataListener> dataListeners = new CopyOnWriteArrayList<>();
     private static final boolean DEFAULT_USE_EMBEDDED = false;
+    private static final boolean DEFAULT_ALLOW_PORT_SEARCH = false;
+    private static final boolean DEFAULT_ALLOW_MOCK_FALLBACK = false;
     private static final int DEFAULT_REDIS_PORT = 6379;
     private static final String DEFAULT_REDIS_HOST = "localhost";
 
     private final String host;
     private final int port;
     private final boolean useEmbedded;
+    private final boolean allowPortSearch;
+    private final boolean allowMockFallback;
     private JedisPool jedisPool;
     private SimpleLogger logger;
     private boolean connected = false;
@@ -58,9 +62,19 @@ public class Redis {
     }
 
     public Redis(String host, int port, boolean useEmbedded) {
+        this(host, port, useEmbedded, DEFAULT_ALLOW_PORT_SEARCH);
+    }
+
+    public Redis(String host, int port, boolean useEmbedded, boolean allowPortSearch) {
+        this(host, port, useEmbedded, allowPortSearch, DEFAULT_ALLOW_MOCK_FALLBACK);
+    }
+
+    public Redis(String host, int port, boolean useEmbedded, boolean allowPortSearch, boolean allowMockFallback) {
         this.host = host;
         this.port = port;
         this.useEmbedded = useEmbedded;
+        this.allowPortSearch = allowPortSearch;
+        this.allowMockFallback = allowMockFallback;
         this.logger = new EmptyLogger();
     }
 
@@ -94,6 +108,11 @@ public class Redis {
             try {
                 startEmbeddedServer();
             } catch (IOException e) {
+                if (!allowMockFallback) {
+                    logger.error("Failed to start embedded Redis server and mock fallback is disabled.", e);
+                    throw e;
+                }
+                
                 logger.warn("Failed to start embedded Redis server. Falling back to mock implementation.", e);
                 mockRedis = new MockRedis();
                 mockRedis.startServer();
@@ -168,6 +187,11 @@ public class Redis {
             int serverPort = port;
 
             if (!isPortAvailable(serverPort)) {
+                if (!allowPortSearch) {
+                    logger.error("Port " + serverPort + " is not available for embedded Redis server and port search is disabled");
+                    throw new IOException("Specified port " + serverPort + " is not available and port search is disabled");
+                }
+                
                 logger.warn("Port " + serverPort + " is not available for embedded Redis server. Trying to find a free port...");
                 serverPort = findFreePort();
                 if (serverPort == -1) {
