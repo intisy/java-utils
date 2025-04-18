@@ -90,7 +90,7 @@ public class Redis {
     }
 
     public void connect() throws IOException {
-        if (useEmbedded && isPortAvailable(port) && isPortAvailable(port + 1)) {
+        if (useEmbedded) {
             try {
                 startEmbeddedServer();
             } catch (IOException e) {
@@ -141,7 +141,7 @@ public class Redis {
                 }
             } catch (JedisConnectionException e) {
                 connected = false;
-                logger.error("Failed to connect to Redis server at " + host + ":" + port, e);
+                logger.error("Failed to connect to Redis server at " + host + ":" + port);
                 if (jedisPool != null) {
                     jedisPool.close();
                     jedisPool = null;
@@ -216,6 +216,45 @@ public class Redis {
         }
         if (embeddedServer != null && !embeddedServer.isActive()){
             embeddedServer = null;
+        }
+    }
+
+    public boolean ping() {
+        if (useMockFallback && mockRedis != null) {
+            return mockRedis.isRunning();
+        }
+        if (useEmbedded && embeddedServer == null && !useMockFallback) {
+            logger.warn("Cannot ping, embedded server is not running and mock fallback is disabled.");
+            return false;
+        }
+        if (jedisPool == null && !useEmbedded) {
+            logger.warn("Cannot ping, JedisPool is not initialized.");
+            return false;
+        }
+
+        if (useEmbedded && embeddedServer != null && embeddedServer.isActive()) {
+            return true;
+        } else if (useEmbedded) {
+            return false;
+        }
+
+        try (Jedis jedis = jedisPool.getResource()) {
+            String reply = jedis.ping();
+            boolean success = "PONG".equalsIgnoreCase(reply);
+            if (!success) {
+                logger.warn("Ping failed, received unexpected reply: " + reply);
+            } else {
+                this.connected = true;
+            }
+            return success;
+        } catch (JedisConnectionException e) {
+            logger.warn("Could not connect to Redis server at " + host + ":" + port + " for ping: " + e.getMessage());
+            this.connected = false;
+            return false;
+        } catch (Exception e) {
+            logger.warn("An unexpected error occurred during ping: " + e.getMessage(), e);
+            this.connected = false;
+            return false;
         }
     }
 
