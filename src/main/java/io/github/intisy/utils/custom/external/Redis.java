@@ -1,6 +1,7 @@
 package io.github.intisy.utils.custom.external;
 
-import io.github.intisy.simple.logger.Log;
+import io.github.intisy.simple.logger.EmptyLogger;
+import io.github.intisy.simple.logger.SimpleLogger;
 import redis.embedded.RedisServer;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
@@ -30,6 +31,7 @@ public class Redis {
     private final int port;
     private final boolean useEmbedded;
     private JedisPool jedisPool;
+    private SimpleLogger logger;
     private boolean connected = false;
     private RedisServer embeddedServer;
     private boolean useMockFallback = false;
@@ -59,6 +61,15 @@ public class Redis {
         this.host = host;
         this.port = port;
         this.useEmbedded = useEmbedded;
+        this.logger = new EmptyLogger();
+    }
+
+    public void setLogger(SimpleLogger logger) {
+        this.logger = logger;
+    }
+
+    public SimpleLogger getLogger() {
+        return logger;
     }
 
     public boolean isPortAvailable(int port) {
@@ -83,7 +94,7 @@ public class Redis {
             try {
                 startEmbeddedServer();
             } catch (IOException e) {
-                Log.warn("Failed to start embedded Redis server. Falling back to mock implementation.", e);
+                logger.warn("Failed to start embedded Redis server. Falling back to mock implementation.", e);
                 mockRedis = new MockRedis();
                 mockRedis.startServer();
 
@@ -93,7 +104,7 @@ public class Redis {
 
                 useMockFallback = true;
                 connected = true;
-                Log.note("Using mock Redis implementation as fallback");
+                logger.note("Using mock Redis implementation as fallback");
                 return;
             }
         }
@@ -126,11 +137,11 @@ public class Redis {
                 try (Jedis jedis = jedisPool.getResource()) {
                     jedis.ping();
                     connected = true;
-                    Log.note("Connected to Redis server at " + connectHost + ":" + connectPort);
+                    logger.note("Connected to Redis server at " + connectHost + ":" + connectPort);
                 }
             } catch (JedisConnectionException e) {
                 connected = false;
-                Log.error("Failed to connect to Redis server at " + host + ":" + port, e);
+                logger.error("Failed to connect to Redis server at " + host + ":" + port, e);
                 if (jedisPool != null) {
                     jedisPool.close();
                     jedisPool = null;
@@ -141,10 +152,10 @@ public class Redis {
             try (Jedis jedis = jedisPool.getResource()) {
                 jedis.ping();
                 connected = true;
-                Log.note("Already connected to Redis server at " + host + ":" + port);
+                logger.note("Already connected to Redis server at " + host + ":" + port);
             } catch (JedisConnectionException e) {
                 connected = false;
-                Log.error("Connection to Redis server at " + host + ":" + port + " is broken", e);
+                logger.error("Connection to Redis server at " + host + ":" + port + " is broken", e);
                 jedisPool.close();
                 jedisPool = null;
                 throw new IOException("Connection to Redis server is broken: " + e.getMessage(), e);
@@ -157,13 +168,13 @@ public class Redis {
             int serverPort = port;
 
             if (!isPortAvailable(serverPort)) {
-                Log.warn("Port " + serverPort + " is not available for embedded Redis server. Trying to find a free port...");
+                logger.warn("Port " + serverPort + " is not available for embedded Redis server. Trying to find a free port...");
                 serverPort = findFreePort();
                 if (serverPort == -1) {
-                    Log.error("Could not find a free port for embedded Redis server");
+                    logger.error("Could not find a free port for embedded Redis server");
                     throw new IOException("Could not find a free port for embedded Redis server");
                 }
-                Log.note("Found free port for embedded Redis server: " + serverPort);
+                logger.note("Found free port for embedded Redis server: " + serverPort);
             }
 
             try {
@@ -175,18 +186,18 @@ public class Redis {
                         .build();
 
                 embeddedServer.start();
-                Log.note("Embedded Redis server started on port: " + serverPort);
+                logger.note("Embedded Redis server started on port: " + serverPort);
             } catch (IOException e) {
-                Log.error("Failed to start embedded Redis server on port " + serverPort + ": " + e.getMessage(), e);
+                logger.error("Failed to start embedded Redis server on port " + serverPort + ": " + e.getMessage(), e);
                 stopEmbeddedServer();
                 throw e;
             } catch (Exception e) {
-                Log.error("An unexpected error occurred while starting embedded Redis server on port " + serverPort + ": " + e.getMessage(), e);
+                logger.error("An unexpected error occurred while starting embedded Redis server on port " + serverPort + ": " + e.getMessage(), e);
                 stopEmbeddedServer();
                 throw new IOException("Unexpected error starting Redis: " + e.getMessage(), e);
             }
         } else {
-            Log.note("Embedded Redis server is already running on port: " + port);
+            logger.note("Embedded Redis server is already running on port: " + port);
         }
     }
 
@@ -194,14 +205,14 @@ public class Redis {
         if (embeddedServer != null && embeddedServer.isActive()) {
             try {
                 embeddedServer.stop();
-                Log.note("Embedded Redis server stopped on port: " +  port);
+                logger.note("Embedded Redis server stopped on port: " +  port);
             } catch (Exception e) {
-                Log.error("Error while stopping embedded Redis server on port " + port, e);
+                logger.error("Error while stopping embedded Redis server on port " + port, e);
             } finally {
                 embeddedServer = null;
             }
         } else if (embeddedServer == null) {
-            Log.note("Embedded Redis server was not running or already stopped.");
+            logger.note("Embedded Redis server was not running or already stopped.");
         }
         if (embeddedServer != null && !embeddedServer.isActive()){
             embeddedServer = null;
@@ -225,15 +236,15 @@ public class Redis {
         if (jedisPool != null) {
             try {
                 jedisPool.close();
-                Log.note("Disconnected from Redis server at " + host + ":" + port);
+                logger.note("Disconnected from Redis server at " + host + ":" + port);
             } catch (Exception e) {
-                Log.error("Error while closing Jedis pool", e);
+                logger.error("Error while closing Jedis pool", e);
             } finally {
                 jedisPool = null;
                 connected = false;
             }
         } else {
-            Log.note("Not connected to any Redis server");
+            logger.note("Not connected to any Redis server");
         }
     }
 
@@ -273,7 +284,7 @@ public class Redis {
         }
 
         if (!isConnected()) {
-            Log.error("Not connected to Redis server. Cannot set data.");
+            logger.error("Not connected to Redis server. Cannot set data.");
             return null;
         }
         try (Jedis jedis = jedisPool.getResource()) {
@@ -281,11 +292,11 @@ public class Redis {
             notifyDataSetListeners(key, value);
             return result;
         } catch (JedisConnectionException e) {
-            Log.error("Jedis connection error during SET operation", e);
+            logger.error("Jedis connection error during SET operation", e);
             connected = false;
             return null;
         } catch (Exception e) {
-            Log.error("Error setting data in Redis", e);
+            logger.error("Error setting data in Redis", e);
             return null;
         }
     }
@@ -296,7 +307,7 @@ public class Redis {
         }
 
         if (!isConnected()) {
-            Log.error("Not connected to Redis server. Cannot get data.");
+            logger.error("Not connected to Redis server. Cannot get data.");
             return null;
         }
         try (Jedis jedis = jedisPool.getResource()) {
@@ -304,11 +315,11 @@ public class Redis {
             notifyDataListeners(key, value);
             return value;
         } catch (JedisConnectionException e) {
-            Log.error("Jedis connection error during GET operation", e);
+            logger.error("Jedis connection error during GET operation", e);
             connected = false;
             return null;
         } catch (Exception e) {
-            Log.error("Error getting data from Redis", e);
+            logger.error("Error getting data from Redis", e);
             return null;
         }
     }
@@ -319,17 +330,17 @@ public class Redis {
         }
 
         if (!isConnected()) {
-            Log.error("Not connected to Redis server. Cannot delete data.");
+            logger.error("Not connected to Redis server. Cannot delete data.");
             return null;
         }
         try (Jedis jedis = jedisPool.getResource()) {
             return jedis.del(key);
         } catch (JedisConnectionException e) {
-            Log.error("Jedis connection error during DELETE operation", e);
+            logger.error("Jedis connection error during DELETE operation", e);
             connected = false;
             return null;
         } catch (Exception e) {
-            Log.error("Error deleting data from Redis", e);
+            logger.error("Error deleting data from Redis", e);
             return null;
         }
     }
@@ -340,17 +351,17 @@ public class Redis {
         }
 
         if (!isConnected()) {
-            Log.error("Not connected to Redis server. Cannot check if key exists.");
+            logger.error("Not connected to Redis server. Cannot check if key exists.");
             return false;
         }
         try (Jedis jedis = jedisPool.getResource()) {
             return jedis.exists(key);
         } catch (JedisConnectionException e) {
-            Log.error("Jedis connection error during EXISTS operation", e);
+            logger.error("Jedis connection error during EXISTS operation", e);
             connected = false;
             return false;
         } catch (Exception e) {
-            Log.error("Error checking if key exists in Redis", e);
+            logger.error("Error checking if key exists in Redis", e);
             return false;
         }
     }
@@ -361,7 +372,7 @@ public class Redis {
         }
 
         if (!isConnected()) {
-            Log.error("Not connected to Redis server. Cannot set data with expiry.");
+            logger.error("Not connected to Redis server. Cannot set data with expiry.");
             return null;
         }
         try (Jedis jedis = jedisPool.getResource()) {
@@ -369,11 +380,11 @@ public class Redis {
             notifyDataSetListeners(key, value);
             return result;
         } catch (JedisConnectionException e) {
-            Log.error("Jedis connection error during SETEX operation", e);
+            logger.error("Jedis connection error during SETEX operation", e);
             connected = false;
             return null;
         } catch (Exception e) {
-            Log.error("Error setting data with expiry in Redis", e);
+            logger.error("Error setting data with expiry in Redis", e);
             return null;
         }
     }
@@ -383,7 +394,7 @@ public class Redis {
             try {
                 listener.onDataReceived(key, value);
             } catch (Exception e) {
-                Log.error("Error notifying Redis data listener for data received", e);
+                logger.error("Error notifying Redis data listener for data received", e);
             }
         }
     }
@@ -393,7 +404,7 @@ public class Redis {
             try {
                 listener.onDataSet(key, value);
             } catch (Exception e) {
-                Log.error("Error notifying Redis data listener for data set", e);
+                logger.error("Error notifying Redis data listener for data set", e);
             }
         }
     }
@@ -419,13 +430,13 @@ public class Redis {
 
         public void startServer() {
             running = true;
-            Log.note("Mock Redis server started");
+            getLogger().note("Mock Redis server started");
         }
 
         public void stopServer() {
             running = false;
             dataStore.clear();
-            Log.note("Mock Redis server stopped");
+            getLogger().note("Mock Redis server stopped");
         }
 
         public boolean isRunning() {
@@ -435,7 +446,7 @@ public class Redis {
         @Override
         public String setData(String key, String value) {
             if (!isRunning()) {
-                Log.error("Mock Redis server is not running. Cannot set data.");
+                getLogger().error("Mock Redis server is not running. Cannot set data.");
                 return null;
             }
             dataStore.put(key, value);
@@ -446,7 +457,7 @@ public class Redis {
         @Override
         public String getData(String key) {
             if (!isRunning()) {
-                Log.error("Mock Redis server is not running. Cannot get data.");
+                getLogger().error("Mock Redis server is not running. Cannot get data.");
                 return null;
             }
             String value = dataStore.get(key);
@@ -457,7 +468,7 @@ public class Redis {
         @Override
         public Long deleteData(String key) {
             if (!isRunning()) {
-                Log.error("Mock Redis server is not running. Cannot delete data.");
+                getLogger().error("Mock Redis server is not running. Cannot delete data.");
                 return null;
             }
             if (dataStore.containsKey(key)) {
@@ -470,7 +481,7 @@ public class Redis {
         @Override
         public boolean exists(String key) {
             if (!isRunning()) {
-                Log.error("Mock Redis server is not running. Cannot check if key exists.");
+                getLogger().error("Mock Redis server is not running. Cannot check if key exists.");
                 return false;
             }
             return dataStore.containsKey(key);
@@ -479,7 +490,7 @@ public class Redis {
         @Override
         public String setDataWithExpiry(String key, String value, int seconds) {
             if (!isRunning()) {
-                Log.error("Mock Redis server is not running. Cannot set data with expiry.");
+                getLogger().error("Mock Redis server is not running. Cannot set data with expiry.");
                 return null;
             }
             dataStore.put(key, value);
