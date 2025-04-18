@@ -79,7 +79,7 @@ public class Redis {
     }
 
     public void connect() throws IOException {
-        if (useEmbedded) {
+        if (useEmbedded && isPortAvailable(port) && isPortAvailable(port + 1)) {
             try {
                 startEmbeddedServer();
             } catch (IOException e) {
