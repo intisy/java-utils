@@ -7,7 +7,7 @@ import java.io.IOException;
 /**
  * @author Finn Birich
  */
-public class TestRedis {
+public class RedisConnectionTest {
     public static void main(String[] args) {
         System.out.println("Redis Client Event System Demonstration");
         System.out.println("======================================\n");
