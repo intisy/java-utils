@@ -1,7 +1,6 @@
 package io.github.intisy.utils.custom.external;
 
 import io.github.intisy.simple.logger.SimpleLogger; // Assuming you have a logger implementation
-import io.github.intisy.utils.custom.external.Redis;
 import io.github.intisy.utils.utils.ThreadUtils; // Using your ThreadUtils for convenience
 
 import java.io.IOException;
