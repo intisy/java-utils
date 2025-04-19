@@ -1,7 +1,6 @@
 package io.github.intisy.utils.custom.external;
 
 import io.github.intisy.simple.logger.SimpleLogger; // Assuming you have a logger implementation
-import io.github.intisy.utils.custom.external.Redis;
 
 import java.io.IOException;
 
@@ -12,7 +11,7 @@ public class RedisMultiClientTest {
         Redis serverInstance = null;
         Redis client1 = null;
         Redis client2 = null;
-        int actualPort = -1;
+        int actualPort;
 
         try {
             // 1. Start an embedded Redis server instance

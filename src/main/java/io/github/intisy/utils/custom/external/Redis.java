@@ -243,6 +243,7 @@ public class Redis {
         }
     }
 
+    @SuppressWarnings("BooleanMethodIsAlwaysInverted")
     public boolean ping() {
         if (useMockFallback && mockRedis != null) {
             return mockRedis.isRunning();
@@ -539,14 +540,97 @@ public class Redis {
         }, "Redis-Subscriber-" + channel).start();
     }
 
+    public boolean enqueue(String queueName, String message) {
+        if (useMockFallback) {
+            return mockRedis.enqueue(queueName, message);
+        }
+    
+        if (!isConnected()) {
+            logger.error("Not connected to Redis server. Cannot enqueue message.");
+            return false;
+        }
+    
+        try (Jedis jedis = jedisPool.getResource()) {
+            jedis.rpush(queueName, message);
+            return true;
+        } catch (JedisConnectionException e) {
+            logger.error("Jedis connection error during RPUSH operation", e);
+            connected = false;
+            return false;
+        } catch (Exception e) {
+            logger.error("Error enqueueing message to Redis", e);
+            return false;
+        }
+    }
+
+    public String dequeue(String queueName) {
+        if (useMockFallback) {
+            return mockRedis.dequeue(queueName);
+        }
+    
+        if (!isConnected()) {
+            logger.error("Not connected to Redis server. Cannot dequeue message.");
+            return null;
+        }
+    
+        try (Jedis jedis = jedisPool.getResource()) {
+            return jedis.lpop(queueName);
+        } catch (JedisConnectionException e) {
+            logger.error("Jedis connection error during LPOP operation", e);
+            connected = false;
+            return null;
+        } catch (Exception e) {
+            logger.error("Error dequeuing message from Redis", e);
+            return null;
+        }
+    }
+
+    public void registerQueueConsumer(String queueName, QueueMessageConsumer consumer) {
+        if (useMockFallback) {
+            mockRedis.registerQueueConsumer(queueName, consumer);
+            return;
+        }
+    
+        if (!isConnected()) {
+            logger.error("Not connected to Redis server. Cannot register queue consumer.");
+            return;
+        }
+    
+        new Thread(() -> {
+            try {
+                while (isConnected()) {
+                    try (Jedis jedis = jedisPool.getResource()) {
+                        List<String> result = jedis.blpop(0, queueName);
+                        if (result != null && result.size() >= 2) {
+                            String queue = result.get(0);
+                            String message = result.get(1);
+                            consumer.onMessageReceived(queue, message);
+                        }
+                    }
+                }
+            } catch (JedisConnectionException e) {
+                logger.error("Jedis connection error during BLPOP operation", e);
+                connected = false;
+            } catch (Exception e) {
+                logger.error("Error consuming from Redis queue", e);
+            }
+        }, "Redis-Queue-Consumer-" + queueName).start();
+    }
+
     public interface MessageListener {
         void onMessage(String channel, String message);
     }
 
+    public interface QueueMessageConsumer {
+        void onMessageReceived(String queueName, String message);
+    }
+    
     public static class MockRedis extends Redis {
         private final Map<String, String> dataStore = new HashMap<>();
         private boolean running = false;
         private final Map<String, List<MessageListener>> subscribers = new HashMap<>();
+        private final Map<String, List<String>> messageQueues = new HashMap<>();
+        private final Map<String, List<QueueMessageConsumer>> queueConsumers = new HashMap<>();
 
         public MockRedis() {
             super("mock", 0);
@@ -660,6 +744,59 @@ public class Redis {
             subscribers.computeIfAbsent(channel, k -> new CopyOnWriteArrayList<>())
                       .add(messageListener);
         }
+        
+        public boolean enqueue(String queueName, String message) {
+            if (!isRunning()) {
+                getLogger().error("Mock Redis server is not running. Cannot enqueue message.");
+                return false;
+            }
+            
+            messageQueues.computeIfAbsent(queueName, k -> new CopyOnWriteArrayList<>())
+                         .add(message);
+            
+            List<QueueMessageConsumer> consumers = queueConsumers.get(queueName);
+            if (consumers != null && !consumers.isEmpty()) {
+                QueueMessageConsumer consumer = consumers.get(0);
+                
+                List<String> queue = messageQueues.get(queueName);
+                if (!queue.isEmpty()) {
+                    String msg = queue.remove(0);
+                    new Thread(() -> consumer.onMessageReceived(queueName, msg)).start();
+                }
+            }
+            
+            return true;
+        }
+        
+        public String dequeue(String queueName) {
+            if (!isRunning()) {
+                getLogger().error("Mock Redis server is not running. Cannot dequeue message.");
+                return null;
+            }
+            
+            List<String> queue = messageQueues.get(queueName);
+            if (queue == null || queue.isEmpty()) {
+                return null;
+            }
+            
+            return queue.remove(0);
+        }
+        
+        public void registerQueueConsumer(String queueName, QueueMessageConsumer consumer) {
+            if (!isRunning()) {
+                getLogger().error("Mock Redis server is not running. Cannot register queue consumer.");
+                return;
+            }
+            
+            queueConsumers.computeIfAbsent(queueName, k -> new CopyOnWriteArrayList<>())
+                          .add(consumer);
+            
+            List<String> queue = messageQueues.get(queueName);
+            if (queue != null && !queue.isEmpty()) {
+                String message = queue.remove(0);
+                new Thread(() -> consumer.onMessageReceived(queueName, message)).start();
+            }
+        }
     }
 
     public Map<String, String> getDebugInfo() {
@@ -669,6 +806,8 @@ public class Redis {
             mockInfo.put("status", mockRedis.isRunning() ? "running" : "stopped");
             mockInfo.put("dataStoreSize", String.valueOf(mockRedis.dataStore.size()));
             mockInfo.put("subscribersCount", String.valueOf(mockRedis.subscribers.size()));
+            mockInfo.put("queuesCount", String.valueOf(mockRedis.messageQueues.size()));
+            mockInfo.put("queueConsumersCount", String.valueOf(mockRedis.queueConsumers.size()));
             return mockInfo;
         }
 
@@ -746,7 +885,6 @@ public class Redis {
             Map<String, Long> stats = new HashMap<>();
             stats.put("total_keys", jedis.dbSize());
             
-            // Get key patterns statistics
             Set<String> keys = jedis.keys("*");
             stats.put("string_keys", keys.stream()
                 .filter(k -> jedis.type(k).equals("string"))
