@@ -22,7 +22,7 @@ public class ThreadUtils {
         return newThread(runnable, name, false);
     }
     public static Thread newThread(Runnable runnable, String name, boolean daemon) {
-        Thread thread = new Thread(runnable, name);
+        Thread thread = name != null ? new Thread(runnable, name) : new Thread(runnable);
         thread.setDaemon(daemon);
         thread.start();
         return thread;
