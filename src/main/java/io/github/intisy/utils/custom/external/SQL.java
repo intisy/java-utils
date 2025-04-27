@@ -1060,4 +1060,31 @@ public class SQL {
             throw new RuntimeException(e);
         }
     }
+
+    public void execute(String sql) {
+        logger.warn("Executing SQL statement: " + sql);
+        try (Statement stmt = getConnection().createStatement()) {
+            stmt.execute(sql);
+            logger.debug("Statement executed successfully");
+        } catch (SQLException e) {
+            logger.error("Statement execution failed: " + e.getMessage() + " [SQL: " + sql + "]");
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void execute(String sql, List<?> params) {
+        logger.warn("Executing parameterized SQL statement: " + sql);
+        try (PreparedStatement pstmt = getConnection().prepareStatement(sql)) {
+            bindParameters(pstmt, params);
+            pstmt.execute();
+            logger.debug("Statement executed successfully");
+        } catch (SQLException e) {
+            logger.error("Statement execution failed: " + e.getMessage() + " [SQL: " + sql + "]");
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void execute(String sql, Object... params) {
+        execute(sql, Arrays.asList(params));
+    }
 }
