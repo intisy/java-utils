@@ -279,16 +279,17 @@ public class SQL {
         }
     }
 
-    public List<Map<String, Object>> executeQuery(String sql) {
+    @Deprecated
+    public List<Map<String, Object>> executeRawQuery(String sql) {
         logger.warn("Executing raw query: " + sql);
         List<Map<String, Object>> results = new ArrayList<>();
-        
+
         try (Statement stmt = getConnection().createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
-            
+
             ResultSetMetaData metaData = rs.getMetaData();
             int columnCount = metaData.getColumnCount();
-            
+
             while (rs.next()) {
                 Map<String, Object> row = new LinkedHashMap<>();
                 for (int i = 1; i <= columnCount; i++) {
@@ -300,7 +301,7 @@ public class SQL {
                 }
                 results.add(row);
             }
-            
+
             logger.debug("Query returned " + results.size() + " rows");
             return results;
         } catch (SQLException e) {
