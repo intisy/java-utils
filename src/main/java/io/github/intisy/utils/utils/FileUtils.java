@@ -27,6 +27,9 @@ public class FileUtils {
             if (!file.delete())
                 throw new RuntimeException("Failed to delete file " + file);
     }
+    public static void mkdirs(String file) {
+        mkdirs(new File(file));
+    }
     public static void mkdirs(File file) {
         if (!file.exists())
             if (!file.mkdirs())
@@ -60,24 +63,19 @@ public class FileUtils {
     }
     public static void copyFolder(File source, File destination) {
         try {
-            // Check if source is a directory
             if (source.isDirectory()) {
-                // If destination directory does not exist, create it
                 if (!destination.exists()) {
                     destination.mkdir();
                 }
 
-                // List all files and directories in the source directory
                 String[] files = source.list();
 
                 if (files != null) {
                     for (String file : files) {
-                        // Recursively copy files and directories
                         copyFolder(new File(source, file), new File(destination, file));
                     }
                 }
             } else {
-                // If source is a file, copy it to the destination directory
                 try {
                     Files.copy(source.toPath(), destination.toPath(), StandardCopyOption.REPLACE_EXISTING);
                 } catch (AccessDeniedException ignored) {
@@ -113,23 +111,19 @@ public class FileUtils {
     }
 
     public static void deleteFolder(File folder) {
-        // Check if the given File object represents a directory
         if (folder.isDirectory()) {
-            // List all files and subdirectories in the directory
             File[] files = folder.listFiles();
 
             if (files != null) {
-                // Recursively delete each file and subdirectory
                 for (File file : files) {
                     deleteFolder(file);
                 }
             }
         }
 
-        // Delete the empty directory or file
         folder.delete();
     }
-    public static File file(String file) {
+    public static File cleanFile(String file) {
         File f = new File(file);
         if (f.exists())
             if (!f.delete())
