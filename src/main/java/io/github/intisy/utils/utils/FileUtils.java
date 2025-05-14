@@ -3,13 +3,12 @@ package io.github.intisy.utils.utils;
 import io.github.intisy.simple.logger.Log;
 
 import java.io.*;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.charset.Charset;
-import java.nio.file.AccessDeniedException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
+import java.nio.file.*;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @SuppressWarnings({"unused", "ResultOfMethodCallIgnored"})
 public class FileUtils {
@@ -138,9 +137,9 @@ public class FileUtils {
                     if (files != null) {
                         for (File file : files) {
                             if (file.isDirectory()) {
-                                clean(file); // Recursively clean subdirectories
+                                clean(file);
                             } else {
-                                if (!file.delete()) // Delete files
+                                if (!file.delete())
                                     throw new RuntimeException("could not delete file: " + file);
                             }
                         }
@@ -149,11 +148,28 @@ public class FileUtils {
                     throw new RuntimeException("Folder does not exist.");
                 }
             else {
-                if (!folder.delete()) // Delete folder
+                if (!folder.delete())
                     throw new RuntimeException("could not delete folder: " + folder);
             }
         } else
-            if (!folder.mkdir()) // Create folder
+            if (!folder.mkdir())
                 throw new RuntimeException("could not create folder: " + folder);
+    }
+
+    @SuppressWarnings("resource")
+    public List<String> listResourceFiles(String folder) throws URISyntaxException {
+        URL dirURL = getClass().getClassLoader().getResource(folder);
+        if (dirURL != null && dirURL.getProtocol().equals("file")) {
+            Path path = Paths.get(dirURL.toURI());
+            try {
+                return Files.list(path)
+                        .map(p -> p.getFileName().toString())
+                        .collect(Collectors.toList());
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        } else {
+            return List.of();
+        }
     }
 }
