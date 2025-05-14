@@ -148,8 +148,8 @@ public class FileUtils {
     }
 
     @SuppressWarnings("resource")
-    public List<String> listResourceFiles(String folder) throws URISyntaxException {
-        URL dirURL = getClass().getClassLoader().getResource(folder);
+    public static List<String> listResourceFiles(String folder) throws URISyntaxException {
+        URL dirURL = FileUtils.class.getClassLoader().getResource(folder);
         if (dirURL != null && dirURL.getProtocol().equals("file")) {
             Path path = Paths.get(dirURL.toURI());
             try {
