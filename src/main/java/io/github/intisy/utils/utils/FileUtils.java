@@ -7,6 +7,7 @@ import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.charset.Charset;
 import java.nio.file.*;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -40,24 +41,14 @@ public class FileUtils {
                 throw new RuntimeException("Failed to create file " + file);
     }
     public static void displayFileContent(File file) {
-        BufferedReader reader = null;
 
-        try {
-            reader = new BufferedReader(new FileReader(file));
+        try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 System.out.println(line);
             }
         } catch (IOException e) {
             System.err.println("Error reading the file: " + e.getMessage());
-        } finally {
-            if (reader != null) {
-                try {
-                    reader.close();
-                } catch (IOException e) {
-                    System.err.println("Error closing the file: " + e.getMessage());
-                }
-            }
         }
     }
     public static void copyFolder(File source, File destination) {
@@ -169,7 +160,7 @@ public class FileUtils {
                 throw new UncheckedIOException(e);
             }
         } else {
-            return List.of();
+            return new ArrayList<>();
         }
     }
 }
