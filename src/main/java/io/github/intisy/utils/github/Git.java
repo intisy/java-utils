@@ -1,4 +1,4 @@
-package io.github.intisy.utils.api;
+package io.github.intisy.utils.github;
 
 import io.github.intisy.simple.logger.Log;
 import org.eclipse.jgit.api.PullCommand;
@@ -18,24 +18,78 @@ import java.io.File;
 import java.io.IOException;
 import java.util.*;
 
+/**
+ * A utility class for Git operations using JGit.
+ * This class provides methods for common Git operations such as cloning repositories,
+ * pulling updates, pushing changes, and checking repository status.
+ * It can be used to interact with GitHub repositories programmatically.
+ *
+ * @author Finn Birich
+ */
 @SuppressWarnings("unused")
 public class Git {
+    /**
+     * The API key or personal access token for GitHub authentication.
+     */
     private String apiKey;
+
+    /**
+     * The name of the repository.
+     */
     private String repoName;
+
+    /**
+     * The owner (user or organization) of the repository.
+     */
     private String repoOwner;
+
+    /**
+     * The local file path where the repository is or will be located.
+     */
     private final File path;
+
+    /**
+     * Constructs a Git instance with only a local path.
+     * This constructor is useful when working with existing local repositories
+     * where remote operations are not needed.
+     *
+     * @param path the local file path of the repository
+     */
     public Git(File path) {
         this.path = path;
     }
+
+    /**
+     * Constructs a Git instance with repository details and authentication.
+     * This constructor provides all the information needed for remote operations.
+     *
+     * @param repoOwner the owner (user or organization) of the repository
+     * @param repoName the name of the repository
+     * @param apiKey the API key or personal access token for GitHub authentication
+     * @param path the local file path where the repository is or will be located
+     */
     public Git(String repoOwner, String repoName, String apiKey, File path) {
         this.apiKey = apiKey;
         this.repoName = repoName;
         this.repoOwner = repoOwner;
         this.path = path;
     }
+
+    /**
+     * Creates a GitHub API wrapper for this repository.
+     * This method provides access to GitHub-specific operations.
+     *
+     * @return a GitHub instance configured for this repository
+     */
     public GitHub getGitHub() {
         return new GitHub(repoOwner, repoName, apiKey, true);
     }
+    /**
+     * Gets all changes in the local repository compared to the last commit.
+     * This method categorizes changes into added, modified, deleted, and untracked files.
+     *
+     * @return a map containing sets of file paths categorized by change type
+     */
     public Map<String, Set<String>> getAllChanges() {
         Map<String, Set<String>> changes = new HashMap<>();
         changes.put("added", new HashSet<>());
@@ -57,6 +111,12 @@ public class Git {
         }
         return changes;
     }
+
+    /**
+     * Gets the SHA-1 hash of the most recent commit in the repository.
+     *
+     * @return the SHA-1 hash of the most recent commit, or null if an error occurs
+     */
     public String getCurrentSha() {
         try {
             org.eclipse.jgit.api.Git git = org.eclipse.jgit.api.Git.open(path);
@@ -68,6 +128,13 @@ public class Git {
         } catch (Exception ignored) {}
         return null;
     }
+    /**
+     * Clones the repository from GitHub to the local path.
+     * This method uses the repository owner, name, and API key to authenticate
+     * and clone the repository to the specified path.
+     *
+     * @throws GitAPIException if an error occurs during the clone operation
+     */
     public void cloneRepository() throws GitAPIException {
         String repositoryURL = "https://github.com/" + repoOwner + "/" + repoName;
         Log.note("Cloning repository... (" + repositoryURL + ")");
@@ -80,6 +147,16 @@ public class Git {
             Log.success("Repository cloned successfully.");
         }
     }
+
+    /**
+     * Pushes changes to a file to the remote repository.
+     * This method adds or removes the specified file, commits the changes with the given message,
+     * and pushes the commit to the remote repository.
+     *
+     * @param filePath the path of the file to push, relative to the repository root
+     * @param commitMessage the commit message
+     * @return true if the push was successful, false otherwise
+     */
     public boolean pushRepository(String filePath, String commitMessage) {
         CredentialsProvider credentialsProvider = new UsernamePasswordCredentialsProvider(repoOwner, apiKey);
         try {
@@ -104,6 +181,13 @@ public class Git {
         return false;
     }
 
+    /**
+     * Checks if a Git repository exists at the specified path.
+     * This method verifies that the path contains a valid Git repository
+     * by checking for the existence of the object database.
+     *
+     * @return true if a Git repository exists at the path, false otherwise
+     */
     public boolean doesRepoExist() {
         FileRepositoryBuilder builder = new FileRepositoryBuilder();
         try (Repository repository = builder.setGitDir(path.toPath().resolve(".git").toFile())
@@ -116,6 +200,13 @@ public class Git {
         }
     }
 
+    /**
+     * Checks if the local repository is up to date with the remote repository.
+     * This method fetches the latest changes from the remote repository and
+     * compares the local and remote commit IDs of the current branch.
+     *
+     * @return true if the local repository is up to date, false otherwise
+     */
     public boolean isRepoUpToDate() {
         FileRepositoryBuilder builder = new FileRepositoryBuilder();
         try (Repository repository = builder.setGitDir(path.toPath().resolve(".git").toFile())
@@ -138,6 +229,15 @@ public class Git {
         }
     }
 
+    /**
+     * Pulls the latest changes from the remote repository.
+     * This method fetches the latest changes from the remote repository and
+     * merges them into the local repository. If the repository has multiple branches,
+     * it will log a warning and attempt to pull the first branch.
+     *
+     * @throws GitAPIException if an error occurs during the Git operation
+     * @throws IOException if an I/O error occurs
+     */
     public void pullRepository() throws GitAPIException, IOException {
         CredentialsProvider credentialsProvider = new UsernamePasswordCredentialsProvider(repoOwner, apiKey);
         try (org.eclipse.jgit.api.Git repo = org.eclipse.jgit.api.Git.open(path)) {
@@ -163,6 +263,15 @@ public class Git {
             }
         }
     }
+
+    /**
+     * Clones or pulls the repository depending on its current state.
+     * If the repository already exists locally, this method checks if it's up to date
+     * and pulls changes if needed. If the repository doesn't exist locally, it clones it.
+     *
+     * @throws GitAPIException if an error occurs during the Git operation
+     * @throws IOException if an I/O error occurs
+     */
     public void cloneOrPullRepository() throws GitAPIException, IOException {
         if (doesRepoExist()) {
             if (!isRepoUpToDate())

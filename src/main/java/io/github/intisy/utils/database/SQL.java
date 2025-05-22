@@ -1,4 +1,4 @@
-package io.github.intisy.utils.custom.external;
+package io.github.intisy.utils.database;
 
 import io.github.intisy.simple.logger.EmptyLogger;
 import io.github.intisy.simple.logger.SimpleLogger;
@@ -311,16 +311,16 @@ public class SQL {
     }
 
     public List<Map<String, Object>> executeQuery(String sql, List<?> params) {
-        logger.warn("Executing parameterized query: " + sql);
+        logger.debug("Executing parameterized query: " + sql);
         List<Map<String, Object>> results = new ArrayList<>();
-        
+
         try (PreparedStatement pstmt = getConnection().prepareStatement(sql)) {
             bindParameters(pstmt, params);
-            
+
             try (ResultSet rs = pstmt.executeQuery()) {
                 ResultSetMetaData metaData = rs.getMetaData();
                 int columnCount = metaData.getColumnCount();
-                
+
                 while (rs.next()) {
                     Map<String, Object> row = new LinkedHashMap<>();
                     for (int i = 1; i <= columnCount; i++) {
@@ -333,7 +333,7 @@ public class SQL {
                     results.add(row);
                 }
             }
-            
+
             logger.debug("Query returned " + results.size() + " rows");
             return results;
         } catch (SQLException e) {
@@ -513,9 +513,8 @@ public class SQL {
             if (!(columnsAndValues[i] instanceof String)) {
                 throw new IllegalArgumentException("Column name at index " + i + " must be a String.");
             }
-            String colName = (String) columnsAndValues[i];
             Object value = columnsAndValues[i + 1];
-            insertData.put(colName, value);
+            insertData.put((String) columnsAndValues[i], value);
         }
 
         return insertData(tableName, insertData);
@@ -994,18 +993,18 @@ public class SQL {
 
     public boolean tableExists(String tableName) {
         validateIdentifier(tableName);
-        
+
         try {
             DatabaseMetaData metaData = getConnection().getMetaData();
             String catalog = getConnection().getCatalog();
             String schemaPattern = (databaseType == DatabaseType.MYSQL) ? catalog : null;
-            
+
             try (ResultSet tables = metaData.getTables(
-                    catalog, 
-                    schemaPattern, 
-                    tableName, 
+                    catalog,
+                    schemaPattern,
+                    tableName,
                     new String[]{"TABLE"})) {
-                
+
                 boolean exists = tables.next();
                 logger.debug("Table '" + tableName + "' " + (exists ? "exists" : "does not exist"));
                 return exists;
@@ -1022,16 +1021,16 @@ public class SQL {
 
     public long count(String tableName, Map<String, Object> whereClause) {
         validateIdentifier(tableName);
-        
+
         StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM ")
             .append(quoteIdentifier(tableName));
-        
+
         List<Object> whereValues = new ArrayList<>();
         if (whereClause != null && !whereClause.isEmpty()) {
             List<String> whereConditions = new ArrayList<>();
             for (Map.Entry<String, Object> entry : whereClause.entrySet()) {
                 validateIdentifier(entry.getKey());
-                whereConditions.add(quoteIdentifier(entry.getKey()) + 
+                whereConditions.add(quoteIdentifier(entry.getKey()) +
                     (entry.getValue() == null ? " IS ?" : " = ?"));
                 whereValues.add(entry.getValue());
             }
@@ -1045,7 +1044,7 @@ public class SQL {
             if (!whereValues.isEmpty()) {
                 bindParameters(pstmt, whereValues);
             }
-            
+
             try (ResultSet rs = pstmt.executeQuery()) {
                 if (rs.next()) {
                     long count = rs.getLong(1);
@@ -1055,7 +1054,7 @@ public class SQL {
                 return 0;
             }
         } catch (SQLException e) {
-            logger.error("Count failed for table '" + tableName + "': " + 
+            logger.error("Count failed for table '" + tableName + "': " +
                 e.getMessage() + " [SQL: " + sqlString + "]");
             throw new RuntimeException(e);
         }
