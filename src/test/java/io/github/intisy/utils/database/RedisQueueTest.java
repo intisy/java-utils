@@ -1,4 +1,4 @@
-package io.github.intisy.utils.custom.external;
+package io.github.intisy.utils.database;
 
 import java.util.ArrayList;
 import java.util.List;

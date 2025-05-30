@@ -4,6 +4,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.Strictness;
 import com.google.gson.stream.JsonReader;
+import io.github.intisy.simple.logger.Log;
 
 import java.io.*;
 import java.net.HttpURLConnection;
@@ -239,7 +240,7 @@ public class ConnectionUtils {
             throw new IOException("Failed to parse JSON: " + e.getMessage());
         }
         if (responseCode != HttpURLConnection.HTTP_OK) {
-            throw new IOException("Response code: " + responseCode + " response: " + jsonObject.toString());
+            Log.error("Response code: " + responseCode + " response: " + jsonObject.toString());
         }
         jsonObject.addProperty("code", responseCode);
         br.close();

@@ -1,4 +1,4 @@
-package io.github.intisy.utils.custom.external;
+package io.github.intisy.utils.database;
 
 import io.github.intisy.simple.logger.SimpleLogger; // Assuming you have a logger implementation
 
@@ -21,7 +21,7 @@ public class RedisServerClientTest {
             serverClient.connect(); // Starts the embedded server and connects this instance to it
 
             if (!serverClient.isConnected() || !serverClient.ping()) {
-                 throw new RuntimeException("Failed to start or connect the embedded Redis server instance.");
+                throw new RuntimeException("Failed to start or connect the embedded Redis server instance.");
             }
             logger.success("Embedded Redis server started by serverClient on host: " + serverClient.getHost() + ", port: " + serverClient.getPort());
 
@@ -34,7 +34,7 @@ public class RedisServerClientTest {
             client2.connect(); // Connects to the existing embedded server
 
             if (!client2.isConnected() || !client2.ping()) {
-                 throw new RuntimeException("Client 2 failed to connect to the embedded server.");
+                throw new RuntimeException("Client 2 failed to connect to the embedded server.");
             }
             logger.success("Client 2 connected successfully.");
 
@@ -60,7 +60,7 @@ public class RedisServerClientTest {
             client2.setData(key2, value2);
             logger.info("ServerClient getting data for Key='" + key2 + "'");
             String retrievedValue2 = serverClient.getData(key2);
-             if (value2.equals(retrievedValue2)) {
+            if (value2.equals(retrievedValue2)) {
                 logger.success("Success! ServerClient retrieved value from Client 2: '" + retrievedValue2 + "'");
             } else {
                 logger.error("Failure! ServerClient retrieved unexpected value: '" + retrievedValue2 + "'");
@@ -82,7 +82,7 @@ public class RedisServerClientTest {
             logger.info("Cleaning up resources...");
             if (client2 != null && client2.isConnected()) {
                 client2.disconnect();
-                 logger.info("Client 2 disconnected.");
+                logger.info("Client 2 disconnected.");
             }
             if (serverClient != null && serverClient.isConnected()) {
                 // Disconnecting the instance that manages the embedded server will stop it.

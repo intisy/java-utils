@@ -1,5 +1,7 @@
 package io.github.intisy.utils.core;
 
+import io.github.intisy.simple.logger.Log;
+
 import java.io.*;
 import java.net.URISyntaxException;
 import java.net.URL;
@@ -13,7 +15,7 @@ import java.util.stream.Collectors;
  * Utility class providing file and directory operations for common file system tasks.
  * This class includes methods for reading, writing, copying, and deleting files and directories,
  * as well as utilities for working with resources and temporary files.
- * <p>
+ *
  * Many methods in this class are designed to be resilient, retrying operations or
  * providing clear error messages when operations fail.
  *
@@ -30,10 +32,12 @@ public class FileUtils {
      * @return a list of strings representing the lines in the file
      */
     public static List<String> readAllLines(Path directory, Charset charset) {
-        try {
-            return Files.readAllLines(directory, charset);
-        } catch (IOException e) {
-            throw new RuntimeException("Exception while reading file, waiting for problem to resolve...");
+        while (true) {
+            try {
+                return Files.readAllLines(directory, charset);
+            } catch (IOException e) {
+                Log.warning("Exception while reading file, waiting for problem to resolve...");
+            }
         }
     }
 
