@@ -317,24 +317,34 @@ public class SQL {
         try (PreparedStatement pstmt = getConnection().prepareStatement(sql)) {
             bindParameters(pstmt, params);
 
-            try (ResultSet rs = pstmt.executeQuery()) {
-                ResultSetMetaData metaData = rs.getMetaData();
-                int columnCount = metaData.getColumnCount();
+            boolean isQuery = sql.trim().toLowerCase().startsWith("select");
+            
+            if (isQuery) {
+                try (ResultSet rs = pstmt.executeQuery()) {
+                    ResultSetMetaData metaData = rs.getMetaData();
+                    int columnCount = metaData.getColumnCount();
 
-                while (rs.next()) {
-                    Map<String, Object> row = new LinkedHashMap<>();
-                    for (int i = 1; i <= columnCount; i++) {
-                        String colName = metaData.getColumnLabel(i);
-                        if (colName == null || colName.isEmpty()) {
-                            colName = metaData.getColumnName(i);
+                    while (rs.next()) {
+                        Map<String, Object> row = new LinkedHashMap<>();
+                        for (int i = 1; i <= columnCount; i++) {
+                            String colName = metaData.getColumnLabel(i);
+                            if (colName == null || colName.isEmpty()) {
+                                colName = metaData.getColumnName(i);
+                            }
+                            row.put(colName, rs.getObject(i));
                         }
-                        row.put(colName, rs.getObject(i));
+                        results.add(row);
                     }
-                    results.add(row);
                 }
+                logger.debug("Query returned " + results.size() + " rows");
+            } else {
+                int affected = pstmt.executeUpdate();
+                logger.debug("Update affected " + affected + " rows");
+                Map<String, Object> resultRow = new LinkedHashMap<>();
+                resultRow.put("affectedRows", affected);
+                results.add(resultRow);
             }
-
-            logger.debug("Query returned " + results.size() + " rows");
+            
             return results;
         } catch (SQLException e) {
             logger.error("Query failed: " + e.getMessage() + " [SQL: " + sql + "]");

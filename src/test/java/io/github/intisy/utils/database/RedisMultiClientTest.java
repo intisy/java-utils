@@ -1,4 +1,4 @@
-package io.github.intisy.utils.custom.external;
+package io.github.intisy.utils.database;
 
 import io.github.intisy.simple.logger.SimpleLogger; // Assuming you have a logger implementation
 
@@ -23,7 +23,7 @@ public class RedisMultiClientTest {
             serverInstance.connect(); // This will start the embedded server
 
             if (!serverInstance.isConnected() || !serverInstance.ping()) {
-                 throw new RuntimeException("Failed to start or connect to the embedded Redis server.");
+                throw new RuntimeException("Failed to start or connect to the embedded Redis server.");
             }
             actualPort = serverInstance.getPort(); // Get the actual port used (might differ if port search was needed)
             logger.success("Embedded Redis server started successfully on port: " + actualPort);
@@ -34,8 +34,8 @@ public class RedisMultiClientTest {
             client1 = new Redis(serverInstance.getHost(), actualPort, false, false, false);
             client1.setLogger(logger);
             client1.connect();
-             if (!client1.isConnected() || !client1.ping()) {
-                 throw new RuntimeException("Client 1 failed to connect.");
+            if (!client1.isConnected() || !client1.ping()) {
+                throw new RuntimeException("Client 1 failed to connect.");
             }
             logger.success("Client 1 connected.");
 
@@ -44,8 +44,8 @@ public class RedisMultiClientTest {
             client2 = new Redis(serverInstance.getHost(), actualPort, false, false, false);
             client2.setLogger(logger);
             client2.connect();
-             if (!client2.isConnected() || !client2.ping()) {
-                 throw new RuntimeException("Client 2 failed to connect.");
+            if (!client2.isConnected() || !client2.ping()) {
+                throw new RuntimeException("Client 2 failed to connect.");
             }
             logger.success("Client 2 connected.");
 
@@ -85,7 +85,7 @@ public class RedisMultiClientTest {
             }
             if (client2 != null && client2.isConnected()) {
                 client2.disconnect();
-                 logger.info("Client 2 disconnected.");
+                logger.info("Client 2 disconnected.");
             }
             if (serverInstance != null && serverInstance.isConnected()) {
                 // Disconnecting the instance that manages the embedded server will stop it.
