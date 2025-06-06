@@ -7,6 +7,7 @@ import java.io.File;
 import java.sql.*;
 import java.util.*;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 @SuppressWarnings({"unused", "SqlNoDataSourceInspection", "SqlSourceToSinkFlow"})
 public class SQL {
@@ -1107,133 +1108,93 @@ public class SQL {
             throw new IllegalArgumentException("Column definitions list cannot be null.");
         }
 
-        List<String> actualColumnDefs = new ArrayList<>();
-        List<String> allConstraints = (newConstraints == null) ? new ArrayList<>() : new ArrayList<>(newConstraints);
-        Set<String> constraintKeywords = new HashSet<>(Arrays.asList("CONSTRAINT", "PRIMARY", "UNIQUE", "FOREIGN", "CHECK"));
-
-        for (String def : newColumnDefs) {
-            if (def == null || def.trim().isEmpty()) {
-                throw new IllegalArgumentException("Column definition or constraint cannot be null or empty.");
-            }
-            String firstWord = def.trim().split("[\\s(]+")[0].toUpperCase();
-            if (constraintKeywords.contains(firstWord)) {
-                allConstraints.add(def);
-            } else {
-                actualColumnDefs.add(def);
-            }
-        }
-
-        if (actualColumnDefs.isEmpty() && tableExists(tableName)) {
-            logger.warn("No column definitions provided for schema update of existing table '" + tableName + "'. Only constraints will be processed.");
-        } else if (actualColumnDefs.isEmpty()) {
-            throw new IllegalArgumentException("At least one column definition is required for a new table.");
-        }
-
         try {
+            List<String> actualColumnDefs = new ArrayList<>();
+            List<String> allConstraints = (newConstraints == null) ? new ArrayList<>() : new ArrayList<>(newConstraints);
+            Set<String> constraintKeywords = new HashSet<>(Arrays.asList("CONSTRAINT", "PRIMARY", "UNIQUE", "FOREIGN", "CHECK"));
+
+            for (String def : newColumnDefs) {
+                if (def == null || def.trim().isEmpty()) {
+                    throw new IllegalArgumentException("Column definition or constraint cannot be null or empty.");
+                }
+                String firstWord = def.trim().split("[\\s(]+")[0].toUpperCase();
+                if (constraintKeywords.contains(firstWord)) {
+                    allConstraints.add(def);
+                } else {
+                    actualColumnDefs.add(def);
+                }
+            }
+
             if (!tableExists(tableName)) {
+                if (actualColumnDefs.isEmpty()) {
+                    throw new IllegalArgumentException("At least one column definition is required for a new table.");
+                }
                 logger.warn("Table '" + tableName + "' does not exist. Creating it instead.");
                 createTable(tableName, actualColumnDefs, allConstraints);
                 return true;
             }
 
-            DatabaseMetaData metaData = getConnection().getMetaData();
-            List<String> currentColumns = getTableColumns(tableName, metaData);
+            Map<String, String> currentColumnsMap = getTableColumns(tableName, getConnection().getMetaData()).stream()
+                    .collect(Collectors.toMap(String::toLowerCase, col -> col, (c1, c2) -> c1));
 
-            List<String> newColumnNames = new ArrayList<>();
             Map<String, String> newColumnDefinitions = new LinkedHashMap<>();
-
             for (String colDef : actualColumnDefs) {
-                String[] parts = colDef.trim().split("\\s+", 2);
-                String columnName = parts[0].replace("`", "").replace("\"", "");
-                newColumnNames.add(columnName);
-                newColumnDefinitions.put(columnName, colDef);
+                String originalName = colDef.trim().split("\\s+")[0].replace("`", "").replace("\"", "");
+                newColumnDefinitions.put(originalName.toLowerCase(), colDef);
             }
 
-            boolean changes = false;
+            Set<String> currentLower = currentColumnsMap.keySet();
+            Set<String> newLower = newColumnDefinitions.keySet();
+
+            Set<String> toRemove = new HashSet<>(currentLower);
+            toRemove.removeAll(newLower);
+
+            Set<String> toAdd = new HashSet<>(newLower);
+            toAdd.removeAll(currentLower);
+
+            boolean changesMade = false;
 
             if (databaseType == DatabaseType.SQLITE) {
-                List<String> columnsToRemove = new ArrayList<>();
-                for (String oldCol : currentColumns) {
-                    if (!newColumnNames.isEmpty() && !newColumnNames.contains(oldCol)) {
-                        columnsToRemove.add(oldCol);
-                    }
-                }
-                boolean hasNewColumns = false;
-                for (String newCol : newColumnNames) {
-                    if (!currentColumns.contains(newCol)) {
-                        hasNewColumns = true;
-                        break;
-                    }
-                }
-
-                if (!columnsToRemove.isEmpty() || !allConstraints.isEmpty()) {
-                    recreateTableWithNewSchema(tableName, currentColumns, columnsToRemove, newColumnDefinitions, allConstraints);
+                if (!toRemove.isEmpty() || !allConstraints.isEmpty()) {
+                    recreateTableWithNewSchema(tableName, currentColumnsMap, newColumnDefinitions, allConstraints);
                     return true;
                 }
-                if(hasNewColumns) {
-                    for (String newCol : newColumnNames) {
-                        if (!currentColumns.contains(newCol)) {
-                            String addColumnSql = "ALTER TABLE " + quoteIdentifier(tableName) + " ADD COLUMN " + newColumnDefinitions.get(newCol);
-                            logger.debug("Adding column: " + addColumnSql);
-                            execute(addColumnSql);
-                            changes = true;
-                        }
+                if (!toAdd.isEmpty()) {
+                    for (String colLower : toAdd) {
+                        String colDef = newColumnDefinitions.get(colLower);
+                        execute("ALTER TABLE " + quoteIdentifier(tableName) + " ADD COLUMN " + colDef);
+                        changesMade = true;
                     }
                 }
-                return changes;
-            }
-
-            for (String newCol : newColumnNames) {
-                if (!currentColumns.contains(newCol)) {
-                    String addColumnSql = "ALTER TABLE " + quoteIdentifier(tableName) + " ADD COLUMN " + newColumnDefinitions.get(newCol);
-                    logger.debug("Adding column: " + addColumnSql);
-                    execute(addColumnSql);
-                    changes = true;
+            } else {
+                if (!toAdd.isEmpty()) {
+                    for (String colLower : toAdd) {
+                        String colDef = newColumnDefinitions.get(colLower);
+                        execute("ALTER TABLE " + quoteIdentifier(tableName) + " ADD COLUMN " + colDef);
+                        changesMade = true;
+                    }
                 }
-            }
-
-            for (String oldCol : currentColumns) {
-                if (!newColumnNames.isEmpty() && !newColumnNames.contains(oldCol)) {
-                    String dropColumnSql = "ALTER TABLE " + quoteIdentifier(tableName) + " DROP COLUMN " + quoteIdentifier(oldCol);
-                    logger.debug("Dropping column: " + dropColumnSql);
-                    execute(dropColumnSql);
-                    changes = true;
-                }
-            }
-
-            for (String constraint : allConstraints) {
-                String addConstraintSql = "ALTER TABLE " + quoteIdentifier(tableName) + " ADD " + constraint;
-                try {
-                    logger.debug("Adding constraint: " + addConstraintSql);
-                    execute(addConstraintSql);
-                    changes = true;
-                } catch (RuntimeException e) {
-                    if (e.getCause() instanceof SQLException) {
-                        String msg = e.getCause().getMessage().toLowerCase();
-                        if (msg.contains("duplicate") || msg.contains("already exist")) {
-                            logger.debug("Constraint might already exist, skipping: " + constraint);
-                        } else {
-                            throw e;
-                        }
-                    } else {
-                        throw e;
+                if (!toRemove.isEmpty()) {
+                    for (String colLower : toRemove) {
+                        String originalColName = currentColumnsMap.get(colLower);
+                        execute("ALTER TABLE " + quoteIdentifier(tableName) + " DROP COLUMN " + quoteIdentifier(originalColName));
+                        changesMade = true;
                     }
                 }
             }
 
-            return changes;
+            return changesMade;
         } catch (SQLException e) {
             logger.error("Failed to update table schema for '" + tableName + "': " + e.getMessage());
             throw new RuntimeException(e);
         }
     }
 
-    private void recreateTableWithNewSchema(String tableName, List<String> currentColumns,
-                                            List<String> columnsToRemove, Map<String, String> newColumnDefinitions,
-                                            List<String> newConstraints)
+    private void recreateTableWithNewSchema(String tableName, Map<String, String> currentColumnsMap,
+                                            Map<String, String> newColumnDefinitions, List<String> newConstraints)
             throws SQLException {
 
-        logger.debug("Recreating table '" + tableName + "' for schema update.");
+        logger.warn("Recreating table '" + tableName + "' to apply schema changes.");
 
         boolean wasAutoCommit = getConnection().getAutoCommit();
         if (wasAutoCommit) {
@@ -1243,53 +1204,50 @@ public class SQL {
         try {
             String tempTableName = tableName + "_temp_" + System.currentTimeMillis();
 
-            List<String> newTableColumnDefs = new ArrayList<>(newColumnDefinitions.values());
+            createTable(tempTableName, new ArrayList<>(newColumnDefinitions.values()), newConstraints);
 
-            createTable(tempTableName, newTableColumnDefs, newConstraints);
+            Set<String> currentLower = currentColumnsMap.keySet();
+            Set<String> newLower = newColumnDefinitions.keySet();
+            Set<String> commonLower = new HashSet<>(currentLower);
+            commonLower.retainAll(newLower);
 
-            List<String> columnsToCopy = new ArrayList<>();
-            for (String col : currentColumns) {
-                if (!columnsToRemove.contains(col) && newColumnDefinitions.containsKey(col.replace("`", "").replace("\"", ""))) {
-                    columnsToCopy.add(quoteIdentifier(col));
-                }
-            }
+            if (!commonLower.isEmpty()) {
+                String selectCols = commonLower.stream()
+                        .map(currentColumnsMap::get)
+                        .map(this::quoteIdentifier)
+                        .collect(Collectors.joining(", "));
 
-            if (!columnsToCopy.isEmpty()) {
-                String joinedCols = String.join(", ", columnsToCopy);
-                String copyDataSql = "INSERT INTO " + quoteIdentifier(tempTableName) +
-                        " (" + joinedCols + ")" +
-                        " SELECT " + joinedCols +
-                        " FROM " + quoteIdentifier(tableName);
+                String insertCols = commonLower.stream()
+                        .map(newColumnDefinitions::get)
+                        .map(def -> def.trim().split("\\s+")[0])
+                        .map(this::quoteIdentifier)
+                        .collect(Collectors.joining(", "));
 
-                logger.debug("Copying data: " + copyDataSql);
-                try (Statement stmt = getConnection().createStatement()) {
-                    stmt.execute(copyDataSql);
-                }
+                String copyDataSql = "INSERT INTO " + quoteIdentifier(tempTableName) + " (" + insertCols + ")" +
+                        " SELECT " + selectCols + " FROM " + quoteIdentifier(tableName);
+
+                logger.debug("Copying data to new table: " + copyDataSql);
+                execute(copyDataSql);
             }
 
             deleteTable(tableName);
 
-            String renameSql = "ALTER TABLE " + quoteIdentifier(tempTableName) +
-                    " RENAME TO " + quoteIdentifier(tableName);
-
-            logger.debug("Renaming table: " + renameSql);
-            try (Statement stmt = getConnection().createStatement()) {
-                stmt.execute(renameSql);
-            }
+            execute("ALTER TABLE " + quoteIdentifier(tempTableName) + " RENAME TO " + quoteIdentifier(tableName));
 
             if (wasAutoCommit) {
                 getConnection().commit();
             }
+            logger.info("Successfully recreated table '" + tableName + "' with updated schema.");
 
-            logger.info("Successfully recreated table '" + tableName + "' with updated schema");
-        } catch (SQLException e) {
+        } catch (Exception e) {
+            logger.error("Error during table recreation, attempting to rollback.");
             try {
                 getConnection().rollback();
             } catch (SQLException rollbackEx) {
                 logger.error("Failed to rollback transaction: " + rollbackEx.getMessage());
             }
-
-            throw e;
+            if (e instanceof RuntimeException) throw (RuntimeException) e;
+            throw new RuntimeException("Failed to recreate table", e);
         } finally {
             if (wasAutoCommit) {
                 try {
