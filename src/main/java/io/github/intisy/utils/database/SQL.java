@@ -1096,4 +1096,166 @@ public class SQL {
     public void execute(String sql, Object... params) {
         execute(sql, Arrays.asList(params));
     }
+
+    public boolean updateTableSchema(String tableName, List<String> newColumnDefs) {
+        validateIdentifier(tableName);
+        if (newColumnDefs == null || newColumnDefs.isEmpty()) {
+            throw new IllegalArgumentException("At least one column definition is required.");
+        }
+        
+        try {
+            DatabaseMetaData metaData = getConnection().getMetaData();
+            List<String> currentColumns = getTableColumns(tableName, metaData);
+            
+            if (currentColumns.isEmpty()) {
+                logger.warn("Table '" + tableName + "' does not exist. Creating it instead.");
+                createTable(tableName, newColumnDefs);
+                return true;
+            }
+            
+            List<String> newColumnNames = new ArrayList<>();
+            Map<String, String> newColumnDefinitions = new HashMap<>();
+            
+            for (String colDef : newColumnDefs) {
+                if (colDef == null || colDef.trim().isEmpty()) {
+                    throw new IllegalArgumentException("Column definition cannot be null or empty.");
+                }
+                
+                String[] parts = colDef.trim().split("\\s+", 2);
+                if (parts.length < 1) {
+                    throw new IllegalArgumentException("Invalid column definition: " + colDef);
+                }
+                
+                String columnName = parts[0];
+                if ((columnName.startsWith("\"") && columnName.endsWith("\"")) || 
+                    (columnName.startsWith("`") && columnName.endsWith("`"))) {
+                    columnName = columnName.substring(1, columnName.length() - 1);
+                }
+                
+                newColumnNames.add(columnName);
+                newColumnDefinitions.put(columnName, colDef);
+            }
+            
+            boolean changes = false;
+            
+            for (String newCol : newColumnNames) {
+                if (!currentColumns.contains(newCol)) {
+                    String addColumnSql = "ALTER TABLE " + quoteIdentifier(tableName) + 
+                                         " ADD COLUMN " + newColumnDefinitions.get(newCol);
+                    
+                    logger.debug("Adding column: " + addColumnSql);
+                    try (Statement stmt = getConnection().createStatement()) {
+                        stmt.execute(addColumnSql);
+                        logger.info("Added column '" + newCol + "' to table '" + tableName + "'");
+                        changes = true;
+                    }
+                }
+            }
+            
+            if (databaseType != DatabaseType.SQLITE) {
+                for (String oldCol : currentColumns) {
+                    if (!newColumnNames.contains(oldCol)) {
+                        String dropColumnSql = "ALTER TABLE " + quoteIdentifier(tableName) + 
+                                              " DROP COLUMN " + quoteIdentifier(oldCol);
+                        
+                        logger.debug("Dropping column: " + dropColumnSql);
+                        try (Statement stmt = getConnection().createStatement()) {
+                            stmt.execute(dropColumnSql);
+                            logger.info("Dropped column '" + oldCol + "' from table '" + tableName + "'");
+                            changes = true;
+                        }
+                    }
+                }
+            } else {
+                List<String> columnsToRemove = new ArrayList<>();
+                for (String oldCol : currentColumns) {
+                    if (!newColumnNames.contains(oldCol)) {
+                        columnsToRemove.add(oldCol);
+                    }
+                }
+                
+                if (!columnsToRemove.isEmpty()) {
+                    recreateTableWithNewSchema(tableName, currentColumns, columnsToRemove, newColumnDefinitions);
+                    changes = true;
+                }
+            }
+            
+            return changes;
+        } catch (SQLException e) {
+            logger.error("Failed to update table schema for '" + tableName + "': " + e.getMessage());
+            throw new RuntimeException(e);
+        }
+    }
+
+    private void recreateTableWithNewSchema(String tableName, List<String> currentColumns, 
+                                           List<String> columnsToRemove, Map<String, String> newColumnDefinitions) 
+                                           throws SQLException {
+        
+        logger.debug("Recreating table '" + tableName + "' to remove columns: " + String.join(", ", columnsToRemove));
+        
+        boolean wasAutoCommit = getConnection().getAutoCommit();
+        if (wasAutoCommit) {
+            getConnection().setAutoCommit(false);
+        }
+        
+        try {
+            String tempTableName = tableName + "_temp_" + System.currentTimeMillis();
+            
+            List<String> newTableColumns = new ArrayList<>();
+            for (String colName : newColumnDefinitions.keySet()) {
+                newTableColumns.add(newColumnDefinitions.get(colName));
+            }
+            
+            createTable(tempTableName, newTableColumns);
+            
+            List<String> columnsToCopy = new ArrayList<>();
+            for (String col : currentColumns) {
+                if (!columnsToRemove.contains(col)) {
+                    columnsToCopy.add(quoteIdentifier(col));
+                }
+            }
+            
+            String copyDataSql = "INSERT INTO " + quoteIdentifier(tempTableName) + 
+                                " SELECT " + String.join(", ", columnsToCopy) + 
+                                " FROM " + quoteIdentifier(tableName);
+            
+            logger.debug("Copying data: " + copyDataSql);
+            try (Statement stmt = getConnection().createStatement()) {
+                stmt.execute(copyDataSql);
+            }
+            
+            deleteTable(tableName);
+            
+            String renameSql = "ALTER TABLE " + quoteIdentifier(tempTableName) + 
+                              " RENAME TO " + quoteIdentifier(tableName);
+            
+            logger.debug("Renaming table: " + renameSql);
+            try (Statement stmt = getConnection().createStatement()) {
+                stmt.execute(renameSql);
+            }
+            
+            if (wasAutoCommit) {
+                getConnection().commit();
+                getConnection().setAutoCommit(true);
+            }
+            
+            logger.info("Successfully recreated table '" + tableName + "' with updated schema");
+        } catch (SQLException e) {
+            try {
+                getConnection().rollback();
+            } catch (SQLException rollbackEx) {
+                logger.error("Failed to rollback transaction: " + rollbackEx.getMessage());
+            }
+            
+            if (wasAutoCommit) {
+                try {
+                    getConnection().setAutoCommit(true);
+                } catch (SQLException autoCommitEx) {
+                    logger.error("Failed to restore autoCommit: " + autoCommitEx.getMessage());
+                }
+            }
+            
+            throw e;
+        }
+    }
 }
