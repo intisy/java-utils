@@ -38,13 +38,17 @@ public class SQL {
     }
 
     public SQL(String host, int port, String database, String username, String password) {
+        this(host, port, database, username, password, new EmptyLogger());
+    }
+
+    public SQL(String host, int port, String database, String username, String password, SimpleLogger logger) {
         this(String.format("jdbc:mysql://%s:%d/%s",
                         requireNonNull(host, "host cannot be null"),
                         port,
                         requireNonNull(database, "database cannot be null")),
                 requireNonNull(username, "username cannot be null"),
                 requireNonNull(password, "password cannot be null"),
-                new EmptyLogger());
+                logger);
     }
 
     public SQL(String jdbcUrl, String username, String password, SimpleLogger logger) {
