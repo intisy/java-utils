@@ -11,7 +11,6 @@ import java.util.stream.Collectors;
 
 @SuppressWarnings({"unused", "SqlNoDataSourceInspection", "SqlSourceToSinkFlow"})
 public class SQL {
-
     private static final Pattern VALID_IDENTIFIER_PATTERN = Pattern.compile("^[A-Za-z_][A-Za-z0-9_]*$");
     private static final int MAX_IDENTIFIER_LENGTH = 64;
 
@@ -30,8 +29,12 @@ public class SQL {
     }
 
     public SQL(File dbFile) {
+        this(dbFile, new EmptyLogger());
+    }
+
+    public SQL(File dbFile, SimpleLogger logger) {
         this("jdbc:sqlite:" + requireNonNull(dbFile.getAbsolutePath(), "dbFilePath cannot be null"),
-                null, null, new EmptyLogger());
+                null, null, logger);
     }
 
     public SQL(String host, int port, String database, String username, String password) {
