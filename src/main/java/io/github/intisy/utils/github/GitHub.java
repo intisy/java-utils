@@ -4,7 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import io.github.intisy.simple.logger.Log;
+import io.github.intisy.utils.log.Log;
 import io.github.intisy.utils.net.HttpDeleteWithBody;
 import io.github.intisy.utils.core.FileUtils;
 import io.github.intisy.utils.concurrency.ThreadUtils;
@@ -177,7 +177,7 @@ public class GitHub {
                         value = false;
                     }
                 } catch (NullPointerException exception) {
-                    Log.error("Wrong response: " + ss);
+                    Log.error("Wrong response: " + ss, exception);
                     value = null;
                 }
             }
@@ -200,7 +200,7 @@ public class GitHub {
             if (debug)
                 Log.debug("Repository downloaded successfully from commit SHA " + sha + "!");
         } catch (Exception e) {
-            Log.error("Download failed: " + e.getMessage());
+            Log.error("Download failed: " + e.getMessage(), e);
         }
     }
 
@@ -456,7 +456,7 @@ public class GitHub {
                         String responseString = EntityUtils.toString(entity);
                         jsonObject = JsonParser.parseString(responseString).getAsJsonObject();
                     } catch (NullPointerException exception) {
-                        Log.error("Wrong response: " + jsonObject);
+                        Log.error("Wrong response: " + jsonObject, exception);
                         jsonObject = null;
                     }
                 }
@@ -501,7 +501,7 @@ public class GitHub {
                     jsonObject = JsonParser.parseString(responseString).getAsJsonObject();
                 }
             } catch (NullPointerException exception) {
-                Log.error("Wrong response: " + jsonObject);
+                Log.error("Wrong response: " + jsonObject, exception);
                 jsonObject = null;
             }
         }
@@ -547,7 +547,7 @@ public class GitHub {
                     jsonObject = JsonParser.parseString(responseString).getAsJsonObject();
                 }
             } catch (NullPointerException exception) {
-                Log.error("Wrong response: " + jsonObject);
+                Log.error("Wrong response: " + jsonObject, exception);
                 jsonObject = null;
             }
         }
@@ -608,7 +608,7 @@ public class GitHub {
                     jsonObject = JsonParser.parseString(responseString).getAsJsonObject();
                 }
             } catch (NullPointerException exception) {
-                Log.error("Wrong response: " + jsonObject);
+                Log.error("Wrong response: " + jsonObject, exception);
                 jsonObject = null;
             }
         }
@@ -668,14 +668,13 @@ public class GitHub {
                     else
                         jsonObject = responseJson.getAsJsonObject();
                 } catch (NullPointerException exception) {
-                    Log.error("Wrong response: " + jsonObject);
+                    Log.error("Wrong response: " + jsonObject, exception);
                     jsonObject = null;
                 }
             }
             return jsonObject.get("sha").getAsString();
         } catch (Exception e) {
-//            Log.error("Error getting file SHA: " + e.getMessage());
-//            Log.printStackTrace(null);
+            Log.error("Error getting file SHA: " + e.getMessage(), e);
             return null;
         }
     }
@@ -880,7 +879,7 @@ public class GitHub {
                     String responseString = EntityUtils.toString(entity);
                     jsonObject = JsonParser.parseString(responseString).getAsJsonObject();
                 } catch (NullPointerException exception) {
-                    Log.error("Wrong response: " + jsonObject);
+                    Log.error("Wrong response: " + jsonObject, exception);
                     jsonObject = null;
                 }
             }
@@ -911,7 +910,7 @@ public class GitHub {
                     String responseString = EntityUtils.toString(entity);
                     jsonObject = JsonParser.parseString(responseString);
                 } catch (NullPointerException exception) {
-                    Log.error("Wrong response: " + jsonObject);
+                    Log.error("Wrong response: " + jsonObject, exception);
                     jsonObject = null;
                 }
             }
@@ -955,7 +954,7 @@ public class GitHub {
      * @throws RuntimeException if the asset cannot be found
      */
     public VersionAsset getAsset(String fileName) {
-        Log.debug("Searching for newest jar file from " + repoName + " assets...");
+        Log.info("Searching for newest jar file from " + repoName + " assets...");
         try {
             org.kohsuke.github.GitHub github = accessToken != null ? org.kohsuke.github.GitHub.connectUsingOAuth(accessToken) : org.kohsuke.github.GitHub.connect();
             List<GHRelease> releases = github.getRepository(repoOwner + "/" + repoName).listReleases().toList();
@@ -979,26 +978,26 @@ public class GitHub {
             if (targetRelease != null) {
                 List<GHAsset> assets = targetRelease.listAssets().toList();
                 if (!assets.isEmpty()) {
-                    Log.debug("Found " + assets.size() + " asset(s) in the release");
+                    Log.info("Found " + assets.size() + " asset(s) in the release");
                     for (GHAsset asset : assets) {
                         if (asset.getName().equals(fileName))
                             return new VersionAsset(targetRelease.getTagName(), asset);
                     }
                 } else {
-                    Log.warning("No assets found for the release");
+                    Log.warn("No assets found for the release");
                 }
             } else{
-                Log.warning("Release not found");
+                Log.warn("Release not found");
             }
         } catch (IOException e) {
-            Log.warning("Github exception while pulling asset: " + e.getMessage() + " (retrying in 5 seconds...)");
+            Log.warn("Github exception while pulling asset: " + e.getMessage() + " (retrying in 5 seconds...)");
             ThreadUtils.sleep(5000);
             return getAsset(fileName);
         }
         throw new RuntimeException("Could not find an valid asset");
     }
     public String getLatestTag() {
-        Log.debug("Searching for newest jar file from " + repoName + " assets...");
+        Log.info("Searching for newest jar file from " + repoName + " assets...");
         try {
             org.kohsuke.github.GitHub github = accessToken != null ? org.kohsuke.github.GitHub.connectUsingOAuth(accessToken) : org.kohsuke.github.GitHub.connect();
             GHRepository repo = github.getRepository(repoOwner + "/" + repoName);
@@ -1006,7 +1005,7 @@ public class GitHub {
             GHTag latestTag = tags.iterator().next();
             return latestTag.getName();
         } catch (IOException e) {
-            Log.warning("Github exception while pulling asset: " + e.getMessage());
+            Log.warn("Github exception while pulling asset: " + e.getMessage());
         }
         throw new RuntimeException("Could not find an valid asset");
     }
@@ -1018,7 +1017,7 @@ public class GitHub {
     public void jar(File direction, GHAsset asset, String repoName, String repoOwner) throws IOException {
         String assetName = asset.getName();
         String downloadUrl = "https://api.github.com/repos/" + repoOwner + "/" + repoName + "/releases/assets/" + asset.getId();
-        Log.note("Downloading jar file from Github assets... (" + downloadUrl + ")");
+        Log.info("Downloading jar file from Github assets... (" + downloadUrl + ")");
 
         HttpURLConnection connection = (HttpURLConnection) new URL(downloadUrl).openConnection();
         connection.setRequestMethod("GET");
@@ -1029,7 +1028,7 @@ public class GitHub {
         int responseCode = connection.getResponseCode();
 
         if (responseCode != HttpURLConnection.HTTP_OK) {
-            Log.warning("Failed to download asset: " + responseCode + " (retrying in 5 seconds...)");
+            Log.warn("Failed to download asset: " + responseCode + " (retrying in 5 seconds...)");
             ThreadUtils.sleep(5000);
             connection.disconnect();
             jar(direction, asset, repoName, repoOwner);
@@ -1042,10 +1041,9 @@ public class GitHub {
                 while ((bytesRead = inputStream.read(buffer)) != -1) {
                     fos.write(buffer, 0, bytesRead);
                 }
-                Log.success("Downloaded and saved asset: " + assetName);
+                Log.info("Downloaded and saved asset: " + assetName);
             } catch (IOException e) {
-                Log.error("Error writing file: " + e.getMessage());
-                throw e;
+                Log.error("Error writing file: " + e.getMessage(), e);
             } finally {
                 connection.disconnect();
             }
