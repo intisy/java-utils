@@ -25,8 +25,8 @@ java {
 }
 
 dependencies {
-    implementation "org.slf4j:slf4j-api:2.0.13"
-    implementation "ch.qos.logback:logback-classic:1.5.6"
+    implementation "org.slf4j:slf4j-api:1.7.36"
+    implementation "ch.qos.logback:logback-classic:1.2.13"
     implementation "org.apache.httpcomponents:httpclient:4.5.14"
     implementation "org.kohsuke:github-api:1.99"
     implementation "com.google.code.gson:gson:2.11.0"
