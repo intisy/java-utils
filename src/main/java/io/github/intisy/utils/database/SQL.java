@@ -426,6 +426,53 @@ public class SQL {
         return executeQuery(sql.toString(), params);
     }
 
+    public List<Map<String, Object>> selectData(String tableName, List<String> columns, String whereClause, List<Object> params, String orderBy, int limit) {
+        return selectData(tableName, columns, whereClause, params, orderBy, limit, 0);
+    }
+
+    public List<Map<String, Object>> selectData(String tableName, List<String> columns, String whereClause, List<Object> params, String orderBy, int limit, int offset) {
+        validateIdentifier(tableName);
+        if (columns == null || columns.isEmpty()) {
+            throw new IllegalArgumentException("At least one column must be specified.");
+        }
+        columns.forEach(this::validateIdentifier);
+
+        StringBuilder sql = new StringBuilder("SELECT ");
+        sql.append(columns.stream().map(this::quoteIdentifier).collect(Collectors.joining(", ")))
+           .append(" FROM ").append(quoteIdentifier(tableName));
+
+        if (whereClause != null && !whereClause.trim().isEmpty()) {
+            sql.append(" WHERE ").append(whereClause);
+        }
+
+        if (orderBy != null && !orderBy.trim().isEmpty()) {
+            String[] parts = orderBy.split(",");
+            List<String> orderByClauses = new ArrayList<>();
+            for (String part : parts) {
+                String[] colOrder = part.trim().split("\\s+");
+                validateIdentifier(colOrder[0]);
+                String clause = quoteIdentifier(colOrder[0]);
+                if (colOrder.length > 1 && ("ASC".equalsIgnoreCase(colOrder[1]) || "DESC".equalsIgnoreCase(colOrder[1]))) {
+                    clause += " " + colOrder[1].toUpperCase();
+                }
+                orderByClauses.add(clause);
+            }
+            sql.append(" ORDER BY ").append(String.join(", ", orderByClauses));
+        }
+
+        List<Object> queryParams = new ArrayList<>(params != null ? params : Collections.emptyList());
+        if (limit > 0) {
+            sql.append(" LIMIT ?");
+            queryParams.add(limit);
+            if (offset > 0) {
+                sql.append(" OFFSET ?");
+                queryParams.add(offset);
+            }
+        }
+
+        return executeQuery(sql.toString(), queryParams);
+    }
+
     public int upsertData(String tableName, List<String> conflictColumns, Map<String, Object> insertData) {
         validateIdentifier(tableName);
         if (conflictColumns == null || conflictColumns.isEmpty()) {
