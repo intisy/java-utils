@@ -1,10 +1,14 @@
 package io.github.intisy.utils.log;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.Marker;
+
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.LoggerContext;
 
 public class Log {
-    private static final Logger logger = LogManager.getLogger(Log.class);
+    private static final Logger logger = LoggerFactory.getLogger("io.github.intisy.utils");
 
     public static void trace(String message) {
         logger.trace(message);
@@ -46,11 +50,26 @@ public class Log {
         logger.error(message, t);
     }
 
+    public static void error(Marker marker, String format, Object... argArray) {
+        logger.error(marker, format, argArray);
+    }
+
     public static void fatal(String message) {
-        logger.fatal(message);
+        logger.error(message);
     }
 
     public static void fatal(String message, Throwable t) {
-        logger.fatal(message, t);
+        logger.error(message, t);
+    }
+
+    public static void setLevel(String loggerName, String level) {
+        LoggerContext loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
+        ch.qos.logback.classic.Logger logbackLogger = loggerContext.getLogger(loggerName);
+        logbackLogger.setLevel(Level.toLevel(level));
+        Log.info("Log level for '" + loggerName + "' set to " + level);
+    }
+
+    public static void setRootLevel(String level) {
+        setLevel(ch.qos.logback.classic.Logger.ROOT_LOGGER_NAME, level);
     }
 }

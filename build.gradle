@@ -25,15 +25,13 @@ java {
 }
 
 dependencies {
-    implementation "org.apache.logging.log4j:log4j-api:2.23.1"
-    implementation "org.apache.logging.log4j:log4j-core:2.23.1"
+    implementation "org.slf4j:slf4j-api:2.0.13"
+    implementation "ch.qos.logback:logback-classic:1.5.6"
     implementation "org.apache.httpcomponents:httpclient:4.5.14"
     implementation "org.kohsuke:github-api:1.99"
     implementation "com.google.code.gson:gson:2.11.0"
     implementation "org.eclipse.jgit:org.eclipse.jgit:5.13.3.202401111512-r"
     implementation "org.kohsuke:github-api:1.324"
     implementation "com.github.codemonstur:embedded-redis:1.4.3"
-    implementation "org.slf4j:slf4j-api:1.7.36"
-    implementation "org.slf4j:slf4j-simple:1.7.36"
     testImplementation "junit:junit:4.12"
 }
