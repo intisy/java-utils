@@ -406,11 +406,15 @@ public class SQL {
         if (columns == null || columns.isEmpty()) {
             throw new IllegalArgumentException("At least one column must be specified.");
         }
-        columns.forEach(this::validateIdentifier);
 
         StringBuilder sql = new StringBuilder("SELECT ");
-        sql.append(columns.stream().map(this::quoteIdentifier).collect(Collectors.joining(", ")))
-           .append(" FROM ").append(quoteIdentifier(tableName));
+        if (columns.size() == 1 && "*".equals(columns.get(0))) {
+            sql.append("*");
+        } else {
+            columns.forEach(this::validateIdentifier);
+            sql.append(columns.stream().map(this::quoteIdentifier).collect(Collectors.joining(", ")));
+        }
+        sql.append(" FROM ").append(quoteIdentifier(tableName));
 
         List<Object> queryParams = new ArrayList<>();
         if (whereClause != null && !whereClause.isEmpty()) {
