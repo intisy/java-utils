@@ -1,6 +1,6 @@
 package io.github.intisy.utils.core;
 
-import io.github.intisy.simple.logger.Log;
+import io.github.intisy.utils.log.Log;
 
 import java.io.*;
 import java.net.URISyntaxException;
@@ -36,7 +36,7 @@ public class FileUtils {
             try {
                 return Files.readAllLines(directory, charset);
             } catch (IOException e) {
-                Log.warning("Exception while reading file, waiting for problem to resolve...");
+                Log.warn("Exception while reading file, waiting for problem to resolve...");
             }
         }
     }

@@ -4,7 +4,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.Strictness;
 import com.google.gson.stream.JsonReader;
-import io.github.intisy.simple.logger.Log;
+import io.github.intisy.utils.log.Log;
 
 import java.io.*;
 import java.net.HttpURLConnection;
