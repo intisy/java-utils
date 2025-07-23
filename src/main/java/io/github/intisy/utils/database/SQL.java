@@ -440,90 +440,234 @@ public class SQL {
         if (conflictColumns == null || conflictColumns.isEmpty()) {
             throw new IllegalArgumentException("Conflict columns list cannot be null or empty.");
         }
-        conflictColumns.forEach(this::validateIdentifier);
         if (insertData == null || insertData.isEmpty()) {
-            throw new IllegalArgumentException("Insert data cannot be null or empty.");
+            throw new IllegalArgumentException("Insert data map cannot be null or empty.");
         }
-        insertData.keySet().forEach(this::validateIdentifier);
+
+        for (String col : conflictColumns) {
+            validateIdentifier(col);
+        }
+        List<String> insertColumns = new ArrayList<>();
+        List<Object> insertValues = new ArrayList<>();
+        for (Map.Entry<String, Object> entry : new LinkedHashMap<>(insertData).entrySet()) {
+            validateIdentifier(entry.getKey());
+            insertColumns.add(quoteIdentifier(entry.getKey()));
+            insertValues.add(entry.getValue());
+        }
 
         String sql;
-        if (databaseType == DatabaseType.SQLITE) {
-            sql = buildUpsertSqlite(tableName, conflictColumns, insertData);
-        } else if (databaseType == DatabaseType.MYSQL) {
-            sql = buildUpsertMysql(tableName, conflictColumns, insertData);
-        } else {
-            throw new UnsupportedOperationException("Upsert not supported for database type: " + databaseType);
+        List<String> updateAssignments = new ArrayList<>();
+
+        switch (databaseType) {
+            case SQLITE:
+                for (String col : insertColumns) {
+                    String unquotedCol = col;
+                    if (col.startsWith("\"") && col.endsWith("\"")) {
+                        unquotedCol = col.substring(1, col.length() - 1);
+                    }
+                    if (!conflictColumns.contains(unquotedCol)) {
+                        updateAssignments.add(col + " = excluded." + col);
+                    }
+                }
+                if (updateAssignments.isEmpty()) {
+                    if (insertColumns.size() == conflictColumns.size()) {
+                        throw new IllegalArgumentException("Upsert requires at least one column to update that is not part of the conflict key.");
+                    } else {
+                        throw new IllegalStateException("Failed to generate update assignments for ON CONFLICT clause.");
+                    }
+                }
+
+                sql = String.format(
+                        "INSERT INTO %s (%s) VALUES (%s) ON CONFLICT (%s) DO UPDATE SET %s",
+                        quoteIdentifier(tableName),
+                        String.join(", ", insertColumns),
+                        String.join(", ", Collections.nCopies(insertColumns.size(), "?")),
+                        String.join(", ", conflictColumns.stream().map(this::quoteIdentifier).toArray(String[]::new)),
+                        String.join(", ", updateAssignments)
+                );
+                break;
+
+            case MYSQL:
+                for (String col : insertColumns) {
+                    String unquotedCol = col;
+                    if (col.startsWith("`") && col.endsWith("`")) {
+                        unquotedCol = col.substring(1, col.length() - 1);
+                    }
+                    if (!conflictColumns.contains(unquotedCol)) {
+                        updateAssignments.add(col + " = VALUES(" + col + ")");
+                    }
+                }
+                if (updateAssignments.isEmpty()) {
+                    if (insertColumns.size() == conflictColumns.size()) {
+                        throw new IllegalArgumentException("Upsert requires at least one column to update that is not part of the primary/unique key.");
+                    } else {
+                        throw new IllegalStateException("Failed to generate update assignments for ON DUPLICATE KEY UPDATE clause.");
+                    }
+                }
+
+                sql = String.format(
+                        "INSERT INTO %s (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s",
+                        quoteIdentifier(tableName),
+                        String.join(", ", insertColumns),
+                        String.join(", ", Collections.nCopies(insertColumns.size(), "?")),
+                        String.join(", ", updateAssignments)
+                );
+                break;
+
+            default:
+                Log.error("Upsert operation is not supported for database type: " + databaseType);
+                throw new UnsupportedOperationException("Upsert not supported for database type: " + databaseType);
         }
 
-        List<Object> params = new ArrayList<>(insertData.values());
-        if (databaseType == DatabaseType.MYSQL) {
-            params.addAll(insertData.values()); // For ON DUPLICATE KEY UPDATE part
-        }
+        Log.debug("Executing upsert: " + sql + " with " + insertValues.size() + " parameters.");
 
-        Log.debug("Executing upsert: " + sql);
-        return executeUpdate(sql, params);
+        try (PreparedStatement pstmt = getConnection().prepareStatement(sql)) {
+            bindParameters(pstmt, insertValues);
+            int affectedRows = pstmt.executeUpdate();
+            Log.debug("Upsert successful, " + affectedRows + " row(s) affected.");
+            return affectedRows;
+        } catch (SQLException e) {
+            Log.error("Upsert failed for table '" + tableName + "': " + e.getMessage() + " [SQL: " + sql + "]");
+            throw new RuntimeException(e);
+        }
     }
 
-    public int insertData(String tableName, Map<String, Object> data) {
+    public int insertData(String tableName, Map<String, Object> insertData) {
         validateIdentifier(tableName);
-        if (data == null || data.isEmpty()) {
-            throw new IllegalArgumentException("Data map cannot be null or empty.");
+        if (insertData == null || insertData.isEmpty()) {
+            throw new IllegalArgumentException("Insert data map cannot be null or empty.");
         }
-        data.keySet().forEach(this::validateIdentifier);
 
-        String columns = data.keySet().stream().map(this::quoteIdentifier).collect(Collectors.joining(", "));
-        String placeholders = data.keySet().stream().map(k -> "?").collect(Collectors.joining(", "));
-
-        String sql = String.format("INSERT INTO %s (%s) VALUES (%s)", quoteIdentifier(tableName), columns, placeholders);
-
-        Log.debug("Executing insert: " + sql);
-        return executeUpdate(sql, new ArrayList<>(data.values()));
-    }
-
-    public int updateData(String tableName, Map<String, Object> data, Map<String, Object> whereClause) {
-        validateIdentifier(tableName);
-        if (data == null || data.isEmpty()) {
-            throw new IllegalArgumentException("Data map for update cannot be null or empty.");
-        }
-        data.keySet().forEach(this::validateIdentifier);
-
-        List<String> setClauses = new ArrayList<>();
+        List<String> columns = new ArrayList<>();
         List<Object> values = new ArrayList<>();
-        for (Map.Entry<String, Object> entry : data.entrySet()) {
-            setClauses.add(quoteIdentifier(entry.getKey()) + " = ?");
+        for (Map.Entry<String, Object> entry : new LinkedHashMap<>(insertData).entrySet()) {
+            validateIdentifier(entry.getKey());
+            columns.add(quoteIdentifier(entry.getKey()));
             values.add(entry.getValue());
+        }
+
+        String sql = buildInsertStatement(tableName, columns);
+        Log.debug("Executing insert: " + sql + " with " + values.size() + " values.");
+
+        try (PreparedStatement pstmt = getConnection().prepareStatement(sql)) {
+            bindParameters(pstmt, values);
+            int affectedRows = pstmt.executeUpdate();
+            Log.debug("Insert successful, " + affectedRows + " row(s) affected.");
+            return affectedRows;
+        } catch (SQLException e) {
+            Log.error("Insert failed for table '" + tableName + "': " + e.getMessage() + " [SQL: " + sql + "]");
+            throw new RuntimeException(e);
+        }
+    }
+
+    public int insertData(String tableName, Object... columnsAndValues) {
+        if (columnsAndValues.length == 0) {
+            throw new IllegalArgumentException("No column/value pairs provided for insert.");
+        }
+        if (columnsAndValues.length % 2 != 0) {
+            throw new IllegalArgumentException("Columns and values must be provided in pairs.");
+        }
+
+        Map<String, Object> insertData = new LinkedHashMap<>();
+        for (int i = 0; i < columnsAndValues.length; i += 2) {
+            if (!(columnsAndValues[i] instanceof String)) {
+                throw new IllegalArgumentException("Column name at index " + i + " must be a String.");
+            }
+            Object value = columnsAndValues[i + 1];
+            insertData.put((String) columnsAndValues[i], value);
+        }
+
+        return insertData(tableName, insertData);
+    }
+
+    public int insertData(String tableName, LinkedHashMap<String, Object> insertData) {
+        return insertData(tableName, (Map<String, Object>) insertData);
+    }
+
+    public int insertDataIfEmpty(String tableName, Object... columnsAndValues) {
+        validateIdentifier(tableName);
+        if (columnsAndValues.length < 2) {
+            throw new IllegalArgumentException("Must provide at least one column-value pair for checking existence.");
+        }
+        if (!(columnsAndValues[0] instanceof String)) {
+            throw new IllegalArgumentException("First element (check column) must be a String.");
+        }
+        String checkColumn = (String) columnsAndValues[0];
+        Object checkValue = columnsAndValues[1];
+        validateIdentifier(checkColumn);
+
+        Map<String, Object> where = new HashMap<>();
+        where.put(checkColumn, checkValue);
+        List<Map<String, Object>> existing = selectData(tableName, Collections.singletonList(checkColumn), where);
+
+        if (existing.isEmpty()) {
+            Log.debug("No existing record found for " + checkColumn + ". Inserting...");
+            return insertData(tableName, columnsAndValues);
+        } else {
+            Log.debug("Skip insert - data already exists for " + checkColumn);
+            return 0;
+        }
+    }
+
+    public int updateData(String tableName, Map<String, Object> setClause, Map<String, Object> whereClause) {
+        validateIdentifier(tableName);
+        if (setClause == null || setClause.isEmpty()) {
+            throw new IllegalArgumentException("SET clause map cannot be null or empty.");
+        }
+        if (whereClause == null) {
+            whereClause = Collections.emptyMap();
+            Log.warn("updateData called with null whereClause - will update all rows in table '" + tableName + "'!");
+        }
+
+        List<String> setAssignments = new ArrayList<>();
+        List<Object> setValues = new ArrayList<>();
+        for (Map.Entry<String, Object> entry : setClause.entrySet()) {
+            validateIdentifier(entry.getKey());
+            setAssignments.add(quoteIdentifier(entry.getKey()) + " = ?");
+            setValues.add(entry.getValue());
         }
 
         List<String> whereConditions = new ArrayList<>();
         List<Object> whereValues = new ArrayList<>();
-        if (whereClause != null && !whereClause.isEmpty()) {
-            for (Map.Entry<String, Object> entry : whereClause.entrySet()) {
-                validateIdentifier(entry.getKey());
-                whereConditions.add(quoteIdentifier(entry.getKey()) + (entry.getValue() == null ? " IS NULL" : " = ?"));
-                if(entry.getValue() != null) {
-                    whereValues.add(entry.getValue());
-                }
+        for (Map.Entry<String, Object> entry : whereClause.entrySet()) {
+            validateIdentifier(entry.getKey());
+            whereConditions.add(quoteIdentifier(entry.getKey()) + (entry.getValue() == null ? " IS NULL" : " = ?"));
+            if(entry.getValue() != null) {
+                whereValues.add(entry.getValue());
             }
         }
 
         StringBuilder sql = new StringBuilder("UPDATE ")
                 .append(quoteIdentifier(tableName))
-                .append(" SET ").append(String.join(", ", setClauses));
+                .append(" SET ")
+                .append(String.join(", ", setAssignments));
 
         if (!whereConditions.isEmpty()) {
             sql.append(" WHERE ").append(String.join(" AND ", whereConditions));
         }
 
-        values.addAll(whereValues);
+        String sqlString = sql.toString();
+        List<Object> allParams = new ArrayList<>(setValues);
+        allParams.addAll(whereValues);
 
-        Log.debug("Executing update: " + sql);
-        return executeUpdate(sql.toString(), values);
+        Log.debug("Executing update: " + sqlString + " with " + allParams.size() + " parameters.");
+
+        try (PreparedStatement pstmt = getConnection().prepareStatement(sqlString)) {
+            bindParameters(pstmt, allParams);
+            int affectedRows = pstmt.executeUpdate();
+            Log.debug("Update successful, " + affectedRows + " row(s) affected.");
+            return affectedRows;
+        } catch (SQLException e) {
+            Log.error("Update failed for table '" + tableName + "': " + e.getMessage() + " [SQL: " + sqlString + "]");
+            throw new RuntimeException(e);
+        }
     }
 
     public int deleteData(String tableName, Map<String, Object> whereClause) {
         validateIdentifier(tableName);
-        if (whereClause == null || whereClause.isEmpty()) {
-            throw new IllegalArgumentException("Where clause map cannot be null or empty for delete operation to prevent accidental mass deletion.");
+        if (whereClause == null) {
+            whereClause = Collections.emptyMap();
+            Log.warn("deleteData called with null whereClause - will delete all rows from table '" + tableName + "'!");
         }
 
         List<String> whereConditions = new ArrayList<>();
@@ -537,346 +681,636 @@ public class SQL {
         }
 
         StringBuilder sql = new StringBuilder("DELETE FROM ")
-                .append(quoteIdentifier(tableName))
-                .append(" WHERE ").append(String.join(" AND ", whereConditions));
+                .append(quoteIdentifier(tableName));
 
-        Log.debug("Executing delete: " + sql);
-        return executeUpdate(sql.toString(), whereValues);
-    }
-
-    public List<Map<String, Object>> getData(String tableName, List<String> columns, Map<String, Object> whereClause) {
-        validateIdentifier(tableName);
-        if (columns == null || columns.isEmpty()) {
-            throw new IllegalArgumentException("Columns list cannot be null or empty.");
-        }
-        columns.forEach(this::validateIdentifier);
-
-        String selectedColumns = columns.stream().map(this::quoteIdentifier).collect(Collectors.joining(", "));
-
-        StringBuilder sql = new StringBuilder("SELECT ")
-                .append(selectedColumns)
-                .append(" FROM ").append(quoteIdentifier(tableName));
-
-        List<Object> whereValues = new ArrayList<>();
-        if (whereClause != null && !whereClause.isEmpty()) {
-            List<String> whereConditions = new ArrayList<>();
-            for (Map.Entry<String, Object> entry : whereClause.entrySet()) {
-                validateIdentifier(entry.getKey());
-                whereConditions.add(quoteIdentifier(entry.getKey()) + (entry.getValue() == null ? " IS NULL" : " = ?"));
-                if(entry.getValue() != null) {
-                    whereValues.add(entry.getValue());
-                }
-            }
+        if (!whereConditions.isEmpty()) {
             sql.append(" WHERE ").append(String.join(" AND ", whereConditions));
         }
 
-        Log.debug("Executing select: " + sql);
-        return executeQuery(sql.toString(), whereValues);
+        String sqlString = sql.toString();
+        Log.debug("Executing delete: " + sqlString + " with " + whereValues.size() + " parameters.");
+
+        try (PreparedStatement pstmt = getConnection().prepareStatement(sqlString)) {
+            bindParameters(pstmt, whereValues);
+            int affectedRows = pstmt.executeUpdate();
+            Log.debug("Delete successful, " + affectedRows + " row(s) affected.");
+            return affectedRows;
+        } catch (SQLException e) {
+            Log.error("Delete failed for table '" + tableName + "': " + e.getMessage() + " [SQL: " + sqlString + "]");
+            throw new RuntimeException(e);
+        }
     }
 
-    public List<Map<String, Object>> getData(String tableName, List<String> columns) {
-        return getData(tableName, columns, null);
+    public List<Map<String, Object>> selectData(String tableName, List<String> columnsToSelect, Map<String, Object> whereClause) {
+        validateIdentifier(tableName);
+        if (columnsToSelect == null || columnsToSelect.isEmpty()) {
+            throw new IllegalArgumentException("Must specify at least one column to select (or '*').");
+        }
+
+        String selectColsString;
+        if (columnsToSelect.size() == 1 && "*".equals(columnsToSelect.get(0))) {
+            selectColsString = "*";
+        } else {
+            List<String> quotedCols = new ArrayList<>();
+            for(String col : columnsToSelect) {
+                validateIdentifier(col);
+                quotedCols.add(quoteIdentifier(col));
+            }
+            selectColsString = String.join(", ", quotedCols);
+        }
+
+        if (whereClause == null) {
+            whereClause = Collections.emptyMap();
+        }
+
+        List<String> whereConditions = new ArrayList<>();
+        List<Object> whereValues = new ArrayList<>();
+        for (Map.Entry<String, Object> entry : whereClause.entrySet()) {
+            validateIdentifier(entry.getKey());
+            whereConditions.add(quoteIdentifier(entry.getKey()) + (entry.getValue() == null ? " IS NULL" : " = ?"));
+            if(entry.getValue() != null) {
+                whereValues.add(entry.getValue());
+            }
+        }
+
+        StringBuilder sql = new StringBuilder("SELECT ")
+                .append(selectColsString)
+                .append(" FROM ")
+                .append(quoteIdentifier(tableName));
+
+        if (!whereConditions.isEmpty()) {
+            sql.append(" WHERE ").append(String.join(" AND ", whereConditions));
+        }
+
+        String sqlString = sql.toString();
+        Log.debug("Executing select: " + sqlString + " with " + whereValues.size() + " parameters.");
+
+        List<Map<String, Object>> results = new ArrayList<>();
+        try (PreparedStatement pstmt = getConnection().prepareStatement(sqlString)) {
+            bindParameters(pstmt, whereValues);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                ResultSetMetaData metaData = rs.getMetaData();
+                int columnCount = metaData.getColumnCount();
+                while (rs.next()) {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    for (int i = 1; i <= columnCount; i++) {
+                        String colName = metaData.getColumnLabel(i);
+                        if (colName == null || colName.isEmpty()) {
+                            colName = metaData.getColumnName(i);
+                        }
+                        row.put(colName, rs.getObject(i));
+                    }
+                    results.add(row);
+                }
+            }
+        } catch (SQLException e) {
+            Log.error("Select failed for table '" + tableName + "': " + e.getMessage() + " [SQL: " + sqlString + "]");
+            throw new RuntimeException(e);
+        }
+        Log.debug("Select executed, " + results.size() + " row(s) returned.");
+        return results;
+    }
+
+    public List<Map<String, Object>> selectData(String tableName, List<String> columnsToSelect, String whereColumn, Object whereValue) {
+        Map<String, Object> whereClause = new LinkedHashMap<>();
+        if (whereColumn != null) {
+            validateIdentifier(whereColumn);
+            whereClause.put(whereColumn, whereValue);
+        }
+        return selectData(tableName, columnsToSelect, whereClause);
+    }
+
+    public <T> List<T> selectSingleColumn(String tableName, String columnToSelect, Map<String, Object> whereClause, Class<T> expectedType) throws SQLException {
+        validateIdentifier(columnToSelect);
+
+        List<Map<String, Object>> rawResults = selectData(tableName, Collections.singletonList(columnToSelect), whereClause);
+        List<T> results = new ArrayList<>();
+
+        for(Map<String, Object> row : rawResults) {
+            Object value = row.get(columnToSelect);
+            if(value == null) {
+                results.add(null);
+            } else if (expectedType.isInstance(value)) {
+                results.add(expectedType.cast(value));
+            } else {
+                try {
+                    if (expectedType == String.class) {
+                        results.add(expectedType.cast(value.toString()));
+                    } else if (expectedType == Integer.class && value instanceof Number) {
+                        results.add(expectedType.cast(((Number) value).intValue()));
+                    } else if (expectedType == Long.class && value instanceof Number) {
+                        results.add(expectedType.cast(((Number) value).longValue()));
+                    } else if (expectedType == Double.class && value instanceof Number) {
+                        results.add(expectedType.cast(((Number) value).doubleValue()));
+                    } else if (expectedType == Float.class && value instanceof Number) {
+                        results.add(expectedType.cast(((Number) value).floatValue()));
+                    } else if (expectedType == Boolean.class) {
+                        if(value instanceof Boolean) {
+                            results.add(expectedType.cast(value));
+                        } else if(value instanceof Number) {
+                            results.add(expectedType.cast(((Number)value).intValue() != 0));
+                        } else if (value instanceof String) {
+                            results.add(expectedType.cast(Boolean.parseBoolean((String)value)));
+                        } else {
+                            throw new ClassCastException("Cannot reliably cast " + value.getClass().getName() + " to Boolean");
+                        }
+                    }
+                    else {
+                        throw new ClassCastException("Cannot automatically cast value of type " + value.getClass().getName() + " to " + expectedType.getName());
+                    }
+                } catch (ClassCastException e) {
+                    Log.error("Type mismatch for column '" + columnToSelect + "'. Expected " + expectedType.getName() + ", but got " + value.getClass().getName() + ". Value: " + value);
+                    throw new SQLException("Type mismatch retrieving column " + columnToSelect + ": " + e.getMessage(), e);
+                }
+            }
+        }
+        return results;
+    }
+
+    public int[] insertBatchData(String tableName, List<Map<String, Object>> dataRows) throws SQLException {
+        validateIdentifier(tableName);
+        if (dataRows == null || dataRows.isEmpty()) {
+            throw new IllegalArgumentException("Data rows list cannot be null or empty for batch insert.");
+        }
+
+        Map<String, Object> firstRow = dataRows.get(0);
+        if (firstRow == null || firstRow.isEmpty()) {
+            throw new IllegalArgumentException("First data row map cannot be null or empty.");
+        }
+        Set<String> columnSet = new LinkedHashSet<>(firstRow.keySet());
+        if(columnSet.isEmpty()) {
+            throw new IllegalArgumentException("No columns found in the first data row.");
+        }
+        List<String> columns = new ArrayList<>(columnSet);
+        List<String> quotedColumns = new ArrayList<>();
+        for(String col : columns) {
+            validateIdentifier(col);
+            quotedColumns.add(quoteIdentifier(col));
+        }
+
+        String sql = buildInsertStatement(tableName, quotedColumns);
+        Log.debug("Preparing batch insert: " + sql);
+
+        Connection conn = getConnection();
+        boolean startedTransaction = false;
+        int[] batchResults = {};
+
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            if (conn.getAutoCommit()) {
+                conn.setAutoCommit(false);
+                startedTransaction = true;
+                Log.debug("Temporarily disabled autoCommit for batch insert.");
+            }
+
+            int batchCount = 0;
+            for (Map<String, Object> row : dataRows) {
+                if (row == null || row.size() != columns.size()) {
+                    throw new IllegalArgumentException("Inconsistent row data size in batch. Expected " + columns.size() + " columns based on first row. Found: " + (row == null ? "null" : row.size()));
+                }
+                List<Object> values = new ArrayList<>();
+                for (String col : columns) {
+                    if (!row.containsKey(col)) {
+                        throw new IllegalArgumentException("Row is missing column '" + col + "' required for batch insert (based on first row keys).");
+                    }
+                    values.add(row.get(col));
+                }
+                bindParameters(pstmt, values);
+                pstmt.addBatch();
+                batchCount++;
+            }
+
+            if (batchCount > 0) {
+                Log.debug("Executing batch insert with " + batchCount + " statements.");
+                batchResults = pstmt.executeBatch();
+                Log.debug("Batch insert executed.");
+            }
+
+            if (startedTransaction) {
+                conn.commit();
+                Log.debug("Committed batch insert transaction.");
+            }
+
+        } catch (SQLException | IllegalArgumentException e) {
+            Log.error("Batch insert failed for table '" + tableName + "': " + e.getMessage());
+            if (startedTransaction) {
+                try {
+                    conn.rollback();
+                    Log.warn("Rolled back batch insert transaction due to error.");
+                } catch (SQLException rbEx) {
+                    Log.error("Failed to rollback batch insert transaction: " + rbEx.getMessage());
+                }
+            }
+            if (e instanceof SQLException) throw (SQLException) e;
+            else throw new SQLException("Batch insert failed: " + e.getMessage(), e);
+        } finally {
+            if (startedTransaction) {
+                try {
+                    if (!conn.isClosed()) {
+                        conn.setAutoCommit(true);
+                        Log.debug("Restored autoCommit state.");
+                    }
+                } catch (SQLException acEx) {
+                    Log.error("Failed to restore autoCommit state after batch insert: " + acEx.getMessage());
+                }
+            }
+        }
+        return batchResults;
+    }
+
+    private String quoteIdentifier(String identifier) {
+        return identifier;
+    }
+
+    private String buildInsertStatement(String tableName, List<String> columns) {
+        String cols = String.join(", ", columns);
+        String placeholders = String.join(", ", Collections.nCopies(columns.size(), "?"));
+        return "INSERT INTO " + quoteIdentifier(tableName) + " (" + cols + ") VALUES (" + placeholders + ")";
+    }
+
+    private void bindParameters(PreparedStatement pstmt, List<?> params) throws SQLException {
+        for (int i = 0; i < params.size(); i++) {
+            Object param = params.get(i);
+            if (param == null) {
+                pstmt.setNull(i + 1, Types.VARCHAR);
+            } else {
+                pstmt.setObject(i + 1, param);
+            }
+        }
+    }
+
+    public void logDatabase() {
+        Log.info("--- Logging Database Schema and Content (" + url + ") ---");
+        try {
+            DatabaseMetaData metaData = getConnection().getMetaData();
+            String catalog = getConnection().getCatalog();
+            String schemaPattern = (databaseType == DatabaseType.MYSQL) ? catalog : null;
+
+            try (ResultSet tables = metaData.getTables(catalog, schemaPattern, "%", new String[]{"TABLE"})) {
+                while (tables.next()) {
+                    String tableName = tables.getString("TABLE_NAME");
+                    logTable(tableName, metaData);
+                }
+            }
+        } catch (SQLException e) {
+            Log.error("Failed to list tables: " + e.getMessage());
+            throw new RuntimeException(e);
+        }
+        Log.info("--- Finished Logging Database ---");
+    }
+
+    private void logTable(String tableName, DatabaseMetaData metaData) throws SQLException {
+        List<String> columns = getTableColumns(tableName, metaData);
+        if (columns.isEmpty()) {
+            Log.info("Table: " + tableName + " (No columns found or table does not exist)");
+            return;
+        }
+        logTableContents(tableName, columns);
+    }
+
+    private List<String> getTableColumns(String tableName, DatabaseMetaData metaData) throws SQLException {
+        List<String> columns = new ArrayList<>();
+        String catalog = getConnection().getCatalog();
+        String schemaPattern = (databaseType == DatabaseType.MYSQL) ? catalog : null;
+
+        try (ResultSet cols = metaData.getColumns(catalog, schemaPattern, tableName, null)) {
+            while (cols.next()) {
+                columns.add(cols.getString("COLUMN_NAME"));
+            }
+        } catch (SQLException e) {
+            Log.error("Failed to get columns for table '" + tableName + "': " + e.getMessage());
+            throw new RuntimeException(e);
+        }
+        return columns;
+    }
+
+    private void logTableContents(String tableName, List<String> columns) {
+        List<List<String>> rows = new ArrayList<>();
+        int[] columnWidths = new int[columns.size()];
+        for (int i = 0; i < columns.size(); i++) {
+            columnWidths[i] = columns.get(i).length();
+        }
+
+        String sql = "SELECT * FROM " + quoteIdentifier(tableName);
+        try (PreparedStatement pstmt = getConnection().prepareStatement(sql);
+             ResultSet rs = pstmt.executeQuery()) {
+
+            while (rs.next()) {
+                List<String> row = new ArrayList<>();
+                for (int i = 0; i < columns.size(); i++) {
+                    String value = rs.getString(i + 1);
+                    value = (value == null ? "NULL" : value);
+                    row.add(value);
+                    columnWidths[i] = Math.max(columnWidths[i], value.length());
+                }
+                rows.add(row);
+            }
+        } catch (SQLException e) {
+            Log.error("Failed to retrieve contents for table '" + tableName + "': " + e.getMessage() + " [SQL: " + sql + "]");
+            throw new RuntimeException(e);
+        }
+
+        StringBuilder headerBuilder = new StringBuilder("|");
+        StringBuilder dividerBuilder = new StringBuilder("+");
+        for (int i = 0; i < columns.size(); i++) {
+            String headerCell = " " + padRight(columns.get(i), columnWidths[i]) + " ";
+            headerBuilder.append(headerCell).append("|");
+            dividerBuilder.append(String.join("", Collections.nCopies(columnWidths[i] + 2, "-"))).append("+");
+        }
+
+        String title = " Table: " + tableName + " (" + rows.size() + " rows) ";
+        int totalWidth = dividerBuilder.length();
+        int titlePaddingCount = (totalWidth - title.length()) / 2;
+        String titlePadding = titlePaddingCount > 0 ? String.join("", Collections.nCopies(titlePaddingCount, "-")) : "";
+        String endPadding = String.join("", Collections.nCopies(Math.max(0, totalWidth - title.length() - titlePaddingCount), "-"));
+        String titleLine = titlePadding + title + endPadding;
+
+        Log.info("");
+        Log.info(titleLine);
+        Log.info(headerBuilder.toString());
+        Log.info(dividerBuilder.toString());
+
+        if (rows.isEmpty()) {
+            String emptyRow = "| " + padRight("(No data)", totalWidth - 4) + " |";
+            Log.info(emptyRow);
+        } else {
+            for (List<String> row : rows) {
+                StringBuilder rowBuilder = new StringBuilder("|");
+                for (int i = 0; i < columns.size(); i++) {
+                    rowBuilder.append(" ").append(padRight(row.get(i), columnWidths[i])).append(" |");
+                }
+                Log.info(rowBuilder.toString());
+            }
+        }
+        Log.info(dividerBuilder.toString());
+        Log.info("");
+    }
+
+    private static String padRight(String s, int n) {
+        if (s.length() >= n) {
+            return s;
+        }
+        StringBuilder sb = new StringBuilder(n);
+        sb.append(s);
+        for (int i = s.length(); i < n; i++) {
+            sb.append(' ');
+        }
+        return sb.toString();
     }
 
     public boolean tableExists(String tableName) {
         validateIdentifier(tableName);
+
         try {
-            DatabaseMetaData dbm = getConnection().getMetaData();
-            try (ResultSet tables = dbm.getTables(null, null, tableName, null)) {
+            DatabaseMetaData metaData = getConnection().getMetaData();
+            String catalog = getConnection().getCatalog();
+            String schemaPattern = (databaseType == DatabaseType.MYSQL) ? catalog : null;
+
+            try (ResultSet tables = metaData.getTables(
+                    catalog,
+                    schemaPattern,
+                    tableName,
+                    new String[]{"TABLE"})) {
+
                 boolean exists = tables.next();
-                Log.debug("Table '" + tableName + "' exists: " + exists);
+                Log.debug("Table '" + tableName + "' " + (exists ? "exists" : "does not exist"));
                 return exists;
             }
         } catch (SQLException e) {
-            Log.error("Error checking if table '" + tableName + "' exists: " + e.getMessage());
+            Log.error("Failed to check if table '" + tableName + "' exists: " + e.getMessage());
             throw new RuntimeException(e);
         }
     }
 
-    public boolean columnExists(String tableName, String columnName) {
+    public long count(String tableName) {
+        return count(tableName, null);
+    }
+
+    public long count(String tableName, Map<String, Object> whereClause) {
         validateIdentifier(tableName);
-        validateIdentifier(columnName);
-        try {
-            DatabaseMetaData dbm = getConnection().getMetaData();
-            try (ResultSet columns = dbm.getColumns(null, null, tableName, columnName)) {
-                boolean exists = columns.next();
-                Log.debug("Column '" + columnName + "' in table '" + tableName + "' exists: " + exists);
-                return exists;
+
+        StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM ")
+                .append(quoteIdentifier(tableName));
+
+        List<Object> whereValues = new ArrayList<>();
+        if (whereClause != null && !whereClause.isEmpty()) {
+            String where = whereClause.entrySet().stream()
+                .map(entry -> {
+                    validateIdentifier(entry.getKey());
+                    return quoteIdentifier(entry.getKey()) + (entry.getValue() == null ? " IS NULL" : " = ?");
+                })
+                .collect(Collectors.joining(" AND "));
+            sql.append(" WHERE ").append(where);
+            whereValues.addAll(whereClause.values().stream().filter(Objects::nonNull).collect(Collectors.toList()));
+        }
+
+        String sqlString = sql.toString();
+        Log.debug("Executing count: " + sqlString);
+
+        try (PreparedStatement pstmt = getConnection().prepareStatement(sqlString)) {
+            if (!whereValues.isEmpty()) {
+                bindParameters(pstmt, whereValues);
+            }
+
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    long count = rs.getLong(1);
+                    Log.debug("Count returned: " + count);
+                    return count;
+                }
+                return 0;
             }
         } catch (SQLException e) {
-            Log.error("Error checking if column '" + columnName + "' exists in table '" + tableName + "': " + e.getMessage());
+            Log.error("Count failed for table '" + tableName + "': " +
+                    e.getMessage() + " [SQL: " + sqlString + "]");
             throw new RuntimeException(e);
         }
     }
 
-    public void addColumn(String tableName, String columnDefinition) {
+    public void execute(String sql) {
+        Log.warn("Executing SQL statement: " + sql);
+        try (Statement stmt = getConnection().createStatement()) {
+            stmt.execute(sql);
+            Log.debug("Statement executed successfully");
+        } catch (SQLException e) {
+            Log.error("Statement execution failed: " + e.getMessage() + " [SQL: " + sql + "]");
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void execute(String sql, List<?> params) {
+        Log.warn("Executing parameterized SQL statement: " + sql);
+        try (PreparedStatement pstmt = getConnection().prepareStatement(sql)) {
+            bindParameters(pstmt, params);
+            pstmt.execute();
+            Log.debug("Statement executed successfully");
+        } catch (SQLException e) {
+            Log.error("Statement execution failed: " + e.getMessage() + " [SQL: " + sql + "]");
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void execute(String sql, Object... params) {
+        execute(sql, Arrays.asList(params));
+    }
+
+    public boolean updateTableSchema(String tableName, List<String> newColumnDefs) {
+        return updateTableSchema(tableName, newColumnDefs, null);
+    }
+
+    public boolean updateTableSchema(String tableName, List<String> newColumnDefs, List<String> newConstraints) {
         validateIdentifier(tableName);
-        if (columnDefinition == null || columnDefinition.trim().isEmpty()) {
-            throw new IllegalArgumentException("Column definition cannot be null or empty.");
+        if (newColumnDefs == null) {
+            throw new IllegalArgumentException("Column definitions list cannot be null.");
         }
 
-        String sql = String.format("ALTER TABLE %s ADD COLUMN %s", quoteIdentifier(tableName), columnDefinition);
-        Log.debug("Executing DDL: " + sql);
-
-        try (Statement statement = getConnection().createStatement()) {
-            statement.execute(sql);
-            Log.info("Column added to table '" + tableName + "'.");
-        } catch (SQLException e) {
-            Log.error("Failed to add column to table '" + tableName + "': " + e.getMessage() + " [SQL: " + sql + "]");
-            throw new RuntimeException(e);
-        }
-    }
-
-    public void dropColumn(String tableName, String columnName) {
-        validateIdentifier(tableName);
-        validateIdentifier(columnName);
-
-        String sql;
-        if (databaseType == DatabaseType.SQLITE) {
-            Log.warn("Dropping a column in SQLite requires recreating the table. This is a complex, potentially data-lossy operation and is not directly supported by this simplified method. Please handle this with care manually.");
-            throw new UnsupportedOperationException("Dropping columns is not directly supported for SQLite due to its complexity.");
-        } else {
-            sql = String.format("ALTER TABLE %s DROP COLUMN %s", quoteIdentifier(tableName), quoteIdentifier(columnName));
-        }
-
-        Log.debug("Executing DDL: " + sql);
-        try (Statement statement = getConnection().createStatement()) {
-            statement.execute(sql);
-            Log.info("Column '" + columnName + "' dropped from table '" + tableName + "'.");
-        } catch (SQLException e) {
-            Log.error("Failed to drop column '" + columnName + "' from table '" + tableName + "': " + e.getMessage() + " [SQL: " + sql + "]");
-            throw new RuntimeException(e);
-        }
-    }
-
-    public void renameTable(String oldTableName, String newTableName) {
-        validateIdentifier(oldTableName);
-        validateIdentifier(newTableName);
-
-        String sql = String.format("ALTER TABLE %s RENAME TO %s", quoteIdentifier(oldTableName), quoteIdentifier(newTableName));
-        Log.debug("Executing DDL: " + sql);
-
-        try (Statement statement = getConnection().createStatement()) {
-            statement.execute(sql);
-            Log.info("Table '" + oldTableName + "' renamed to '" + newTableName + "'.");
-        } catch (SQLException e) {
-            Log.error("Failed to rename table '" + oldTableName + "': " + e.getMessage() + " [SQL: " + sql + "]");
-            throw new RuntimeException(e);
-        }
-    }
-
-    public void renameColumn(String tableName, String oldColumnName, String newColumnName) {
-        validateIdentifier(tableName);
-        validateIdentifier(oldColumnName);
-        validateIdentifier(newColumnName);
-
-        String sql;
-        if (databaseType == DatabaseType.SQLITE) {
-            sql = String.format("ALTER TABLE %s RENAME COLUMN %s TO %s", quoteIdentifier(tableName), quoteIdentifier(oldColumnName), quoteIdentifier(newColumnName));
-        } else if (databaseType == DatabaseType.MYSQL) {
-            Log.warn("Renaming a column in MySQL requires specifying the full column definition. This method will attempt to retrieve it, but it may not be perfect for all column types.");
-            String columnDefinition = getColumnDefinition(tableName, oldColumnName);
-            sql = String.format("ALTER TABLE %s CHANGE COLUMN %s %s %s",
-                    quoteIdentifier(tableName),
-                    quoteIdentifier(oldColumnName),
-                    quoteIdentifier(newColumnName),
-                    columnDefinition);
-        } else {
-            throw new UnsupportedOperationException("Rename column not supported for " + databaseType);
-        }
-
-        Log.debug("Executing DDL: " + sql);
-        try (Statement statement = getConnection().createStatement()) {
-            statement.execute(sql);
-            Log.info("Column '" + oldColumnName + "' in table '" + tableName + "' renamed to '" + newColumnName + "'.");
-        } catch (SQLException e) {
-            Log.error("Failed to rename column '" + oldColumnName + "' in table '" + tableName + "': " + e.getMessage() + " [SQL: " + sql + "]");
-            throw new RuntimeException(e);
-        }
-    }
-
-    public void createIndex(String tableName, String indexName, List<String> columns) {
-        validateIdentifier(tableName);
-        validateIdentifier(indexName);
-        if (columns == null || columns.isEmpty()) {
-            throw new IllegalArgumentException("Columns for index cannot be null or empty.");
-        }
-        columns.forEach(this::validateIdentifier);
-
-        String columnList = columns.stream().map(this::quoteIdentifier).collect(Collectors.joining(", "));
-        String sql = String.format("CREATE INDEX %s ON %s (%s)", quoteIdentifier(indexName), quoteIdentifier(tableName), columnList);
-
-        Log.debug("Executing DDL: " + sql);
-        try (Statement statement = getConnection().createStatement()) {
-            statement.execute(sql);
-            Log.info("Index '" + indexName + "' created on table '" + tableName + "'.");
-        } catch (SQLException e) {
-            Log.error("Failed to create index '" + indexName + "': " + e.getMessage() + " [SQL: " + sql + "]");
-            throw new RuntimeException(e);
-        }
-    }
-
-    public void dropIndex(String indexName) {
-        validateIdentifier(indexName);
-        String sql = "DROP INDEX " + quoteIdentifier(indexName);
-
-        if (databaseType == DatabaseType.MYSQL) {
-            Log.error("In MySQL, you must specify the table name to drop an index. Use dropIndex(tableName, indexName).");
-            throw new UnsupportedOperationException("For MySQL, use dropIndex(tableName, indexName).");
-        }
-
-        Log.debug("Executing DDL: " + sql);
-        try (Statement statement = getConnection().createStatement()) {
-            statement.execute(sql);
-            Log.info("Index '" + indexName + "' dropped.");
-        } catch (SQLException e) {
-            Log.error("Failed to drop index '" + indexName + "': " + e.getMessage() + " [SQL: " + sql + "]");
-            throw new RuntimeException(e);
-        }
-    }
-
-    public void dropIndex(String tableName, String indexName) {
-        validateIdentifier(tableName);
-        validateIdentifier(indexName);
-
-        if (databaseType != DatabaseType.MYSQL) {
-            Log.warn("Specifying table name for dropping an index is specific to MySQL. For other databases like SQLite, it's ignored.");
-            dropIndex(indexName);
-            return;
-        }
-
-        String sql = String.format("DROP INDEX %s ON %s", quoteIdentifier(indexName), quoteIdentifier(tableName));
-        Log.debug("Executing DDL: " + sql);
-
-        try (Statement statement = getConnection().createStatement()) {
-            statement.execute(sql);
-            Log.info("Index '" + indexName + "' dropped from table '" + tableName + "'.");
-        } catch (SQLException e) {
-            Log.error("Failed to drop index '" + indexName + "' from table '" + tableName + "': " + e.getMessage() + " [SQL: " + sql + "]");
-            throw new RuntimeException(e);
-        }
-    }
-
-    public List<String> getTableNames() {
-        List<String> tableNames = new ArrayList<>();
         try {
-            DatabaseMetaData metaData = getConnection().getMetaData();
-            String[] types = {"TABLE"};
-            try (ResultSet rs = metaData.getTables(null, null, "%", types)) {
-                while (rs.next()) {
-                    tableNames.add(rs.getString("TABLE_NAME"));
+            List<String> actualColumnDefs = new ArrayList<>();
+            List<String> allConstraints = (newConstraints == null) ? new ArrayList<>() : new ArrayList<>(newConstraints);
+            Set<String> constraintKeywords = new HashSet<>(Arrays.asList("CONSTRAINT", "PRIMARY", "UNIQUE", "FOREIGN", "CHECK"));
+
+            for (String def : newColumnDefs) {
+                if (def == null || def.trim().isEmpty()) {
+                    throw new IllegalArgumentException("Column definition or constraint cannot be null or empty.");
+                }
+                String firstWord = def.trim().split("[\\s(]+")[0].toUpperCase();
+                if (constraintKeywords.contains(firstWord)) {
+                    allConstraints.add(def);
+                } else {
+                    actualColumnDefs.add(def);
                 }
             }
-            Log.debug("Retrieved table names: " + tableNames);
-            return tableNames;
+
+            if (!tableExists(tableName)) {
+                if (actualColumnDefs.isEmpty()) {
+                    throw new IllegalArgumentException("At least one column definition is required for a new table.");
+                }
+                Log.warn("Table '" + tableName + "' does not exist. Creating it instead.");
+                createTable(tableName, actualColumnDefs, allConstraints);
+                return true;
+            }
+
+            Map<String, String> currentColumnsMap = getTableColumns(tableName, getConnection().getMetaData()).stream()
+                    .collect(Collectors.toMap(String::toLowerCase, col -> col, (c1, c2) -> c1));
+
+            Map<String, String> newColumnDefinitions = new LinkedHashMap<>();
+            for (String colDef : actualColumnDefs) {
+                String originalName = colDef.trim().split("\\s+")[0].replace("`", "").replace("\"", "");
+                newColumnDefinitions.put(originalName.toLowerCase(), colDef);
+            }
+
+            Set<String> currentLower = currentColumnsMap.keySet();
+            Set<String> newLower = newColumnDefinitions.keySet();
+
+            Set<String> toRemove = new HashSet<>(currentLower);
+            toRemove.removeAll(newLower);
+
+            Set<String> toAdd = new HashSet<>(newLower);
+            toAdd.removeAll(currentLower);
+
+            boolean changesMade = false;
+
+            if (databaseType == DatabaseType.SQLITE) {
+                if (!toRemove.isEmpty() || !allConstraints.isEmpty()) {
+                    recreateTableWithNewSchema(tableName, currentColumnsMap, newColumnDefinitions, allConstraints);
+                    return true;
+                }
+                if (!toAdd.isEmpty()) {
+                    for (String colLower : toAdd) {
+                        String colDef = newColumnDefinitions.get(colLower);
+                        execute("ALTER TABLE " + quoteIdentifier(tableName) + " ADD COLUMN " + colDef);
+                        changesMade = true;
+                    }
+                }
+            } else {
+                if (!toAdd.isEmpty()) {
+                    for (String colLower : toAdd) {
+                        String colDef = newColumnDefinitions.get(colLower);
+                        execute("ALTER TABLE " + quoteIdentifier(tableName) + " ADD COLUMN " + colDef);
+                        changesMade = true;
+                    }
+                }
+                if (!toRemove.isEmpty()) {
+                    for (String colLower : toRemove) {
+                        String originalColName = currentColumnsMap.get(colLower);
+                        execute("ALTER TABLE " + quoteIdentifier(tableName) + " DROP COLUMN " + quoteIdentifier(originalColName));
+                        changesMade = true;
+                    }
+                }
+            }
+
+            return changesMade;
         } catch (SQLException e) {
-            Log.error("Failed to retrieve table names: " + e.getMessage());
+            Log.error("Failed to update table schema for '" + tableName + "': " + e.getMessage());
             throw new RuntimeException(e);
         }
     }
 
-    public List<Map<String, String>> getTableInfo(String tableName) {
-        validateIdentifier(tableName);
-        List<Map<String, String>> tableInfo = new ArrayList<>();
+    private void recreateTableWithNewSchema(String tableName, Map<String, String> currentColumnsMap,
+                                            Map<String, String> newColumnDefinitions, List<String> newConstraints)
+            throws SQLException {
+
+        Log.warn("Recreating table '" + tableName + "' to apply schema changes.");
+
+        boolean wasAutoCommit = getConnection().getAutoCommit();
+        if (wasAutoCommit) {
+            getConnection().setAutoCommit(false);
+        }
+
         try {
-            DatabaseMetaData metaData = getConnection().getMetaData();
-            try (ResultSet columns = metaData.getColumns(null, null, tableName, null)) {
-                while (columns.next()) {
-                    Map<String, String> columnInfo = new LinkedHashMap<>();
-                    columnInfo.put("COLUMN_NAME", columns.getString("COLUMN_NAME"));
-                    columnInfo.put("TYPE_NAME", columns.getString("TYPE_NAME"));
-                    columnInfo.put("COLUMN_SIZE", columns.getString("COLUMN_SIZE"));
-                    columnInfo.put("IS_NULLABLE", columns.getString("IS_NULLABLE"));
-                    columnInfo.put("IS_AUTOINCREMENT", columns.getString("IS_AUTOINCREMENT"));
-                    tableInfo.add(columnInfo);
+            String tempTableName = tableName + "_temp_" + System.currentTimeMillis();
+
+            createTable(tempTableName, new ArrayList<>(newColumnDefinitions.values()), newConstraints);
+
+            Set<String> currentLower = currentColumnsMap.keySet();
+            Set<String> newLower = newColumnDefinitions.keySet();
+            Set<String> commonLower = new HashSet<>(currentLower);
+            commonLower.retainAll(newLower);
+
+            if (!commonLower.isEmpty()) {
+                String selectCols = commonLower.stream()
+                        .map(currentColumnsMap::get)
+                        .map(this::quoteIdentifier)
+                        .collect(Collectors.joining(", "));
+
+                String insertCols = commonLower.stream()
+                        .map(newColumnDefinitions::get)
+                        .map(def -> def.trim().split("\\s+")[0])
+                        .map(this::quoteIdentifier)
+                        .collect(Collectors.joining(", "));
+
+                String copyDataSql = "INSERT INTO " + quoteIdentifier(tempTableName) + " (" + insertCols + ")" +
+                        " SELECT " + selectCols + " FROM " + quoteIdentifier(tableName);
+
+                Log.debug("Copying data to new table: " + copyDataSql);
+                execute(copyDataSql);
+            }
+
+            deleteTable(tableName);
+
+            execute("ALTER TABLE " + quoteIdentifier(tempTableName) + " RENAME TO " + quoteIdentifier(tableName));
+
+            if (wasAutoCommit) {
+                getConnection().commit();
+            }
+            Log.info("Successfully recreated table '" + tableName + "' with updated schema.");
+
+        } catch (Exception e) {
+            Log.error("Error during table recreation, attempting to rollback.");
+            try {
+                getConnection().rollback();
+            } catch (SQLException rollbackEx) {
+                Log.error("Failed to rollback transaction: " + rollbackEx.getMessage());
+            }
+            if (e instanceof RuntimeException) throw (RuntimeException) e;
+            throw new RuntimeException("Failed to recreate table", e);
+        } finally {
+            if (wasAutoCommit) {
+                try {
+                    getConnection().setAutoCommit(true);
+                } catch (SQLException autoCommitEx) {
+                    Log.error("Failed to restore autoCommit: " + autoCommitEx.getMessage());
                 }
             }
-            Log.debug("Retrieved info for table '" + tableName + "'");
-            return tableInfo;
-        } catch (SQLException e) {
-            Log.error("Failed to retrieve info for table '" + tableName + "': " + e.getMessage());
-            throw new RuntimeException(e);
         }
-    }
-
-    private String getColumnDefinition(String tableName, String columnName) {
-        validateIdentifier(tableName);
-        validateIdentifier(columnName);
-        try {
-            DatabaseMetaData metaData = getConnection().getMetaData();
-            try (ResultSet columns = metaData.getColumns(null, null, tableName, columnName)) {
-                if (columns.next()) {
-                    String typeName = columns.getString("TYPE_NAME");
-                    int columnSize = columns.getInt("COLUMN_SIZE");
-                    String isNullable = columns.getString("IS_NULLABLE");
-                    String columnDef = columns.getString("COLUMN_DEF");
-
-                    StringBuilder definition = new StringBuilder(typeName);
-                    if (typeName.equalsIgnoreCase("VARCHAR") || typeName.equalsIgnoreCase("CHAR")) {
-                        definition.append("(").append(columnSize).append(")");
-                    }
-                    if ("NO".equalsIgnoreCase(isNullable)) {
-                        definition.append(" NOT NULL");
-                    }
-                    if (columnDef != null) {
-                        definition.append(" DEFAULT ").append(columnDef);
-                    }
-                    Log.debug("Retrieved definition for '" + tableName + "." + columnName + "': " + definition);
-                    return definition.toString();
-                }
-            }
-        } catch (SQLException e) {
-            Log.error("Could not retrieve column definition for '" + tableName + "." + columnName + "': " + e.getMessage());
-        }
-        throw new RuntimeException("Could not find column '" + columnName + "' in table '" + tableName + "'.");
-    }
-
-    private void bindParameters(PreparedStatement pstmt, List<?> params) throws SQLException {
-        if (params != null) {
-            for (int i = 0; i < params.size(); i++) {
-                pstmt.setObject(i + 1, params.get(i));
-            }
-        }
-    }
-
-    private String quoteIdentifier(String identifier) {
-        if (identifier == null || identifier.isEmpty()) {
-            return "";
-        }
-        if (databaseType == DatabaseType.MYSQL) {
-            return "`" + identifier.replace("`", "``") + "`";
-        } else {
-            return '"' + identifier.replace("\"", "\"\"") + '"';
-        }
-    }
-
-    private String buildUpsertSqlite(String tableName, List<String> conflictColumns, Map<String, Object> insertData) {
-        String columns = insertData.keySet().stream().map(this::quoteIdentifier).collect(Collectors.joining(", "));
-        String placeholders = insertData.keySet().stream().map(k -> "?").collect(Collectors.joining(", "));
-        String conflictCols = conflictColumns.stream().map(this::quoteIdentifier).collect(Collectors.joining(", "));
-
-        String updateSet = insertData.keySet().stream()
-                .filter(k -> !conflictColumns.contains(k))
-                .map(k -> quoteIdentifier(k) + " = excluded." + quoteIdentifier(k))
-                .collect(Collectors.joining(", "));
-
-        return String.format(
-                "INSERT INTO %s (%s) VALUES (%s) ON CONFLICT(%s) DO UPDATE SET %s",
-                quoteIdentifier(tableName), columns, placeholders, conflictCols, updateSet
-        );
-    }
-
-    private String buildUpsertMysql(String tableName, List<String> conflictColumns, Map<String, Object> insertData) {
-        String columns = insertData.keySet().stream().map(this::quoteIdentifier).collect(Collectors.joining(", "));
-        String placeholders = insertData.keySet().stream().map(k -> "?").collect(Collectors.joining(", "));
-
-        String updateSet = insertData.keySet().stream()
-                .map(k -> quoteIdentifier(k) + " = VALUES(" + quoteIdentifier(k) + ")")
-                .collect(Collectors.joining(", "));
-
-        return String.format(
-                "INSERT INTO %s (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s",
-                quoteIdentifier(tableName), columns, placeholders, updateSet
-        );
     }
 }
