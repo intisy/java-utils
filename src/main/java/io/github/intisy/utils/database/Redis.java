@@ -11,12 +11,43 @@ import java.net.ServerSocket;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @SuppressWarnings("unused")
 public class Redis {
     public interface RedisDataListener {
         void onDataReceived(String key, String value);
         default void onDataSet(String key, String value) {}
+    }
+
+    public static class Subscription {
+        private final JedisPubSub jedisPubSub;
+        private final String[] channels;
+        private final AtomicBoolean active = new AtomicBoolean(true);
+        private final MessageListener mockListener;
+
+        public Subscription(JedisPubSub jedisPubSub, String... channels) {
+            this.jedisPubSub = jedisPubSub;
+            this.channels = channels;
+            this.mockListener = null;
+        }
+
+        public Subscription(MessageListener mockListener, String... channels) {
+            this.jedisPubSub = null;
+            this.channels = channels;
+            this.mockListener = mockListener;
+        }
+
+        public void unsubscribe() {
+            if (active.compareAndSet(true, false)) {
+                if (jedisPubSub != null && jedisPubSub.isSubscribed()) {
+                    jedisPubSub.unsubscribe(channels);
+                }
+            }
+        }
+
+        protected MessageListener getMockListener() { return mockListener; }
+        protected String[] getChannels() { return channels; }
     }
 
     private final List<RedisDataListener> dataListeners = new CopyOnWriteArrayList<>();
@@ -490,32 +521,43 @@ public class Redis {
         }
     }
 
-    public void subscribe(String channel, MessageListener messageListener) {
+    public Subscription subscribe(String channel, MessageListener messageListener) {
         if (useMockFallback) {
-            mockRedis.subscribe(channel, messageListener);
-            return;
+            return mockRedis.subscribe(channel, messageListener);
         }
 
         if (!isConnected()) {
             Log.error("Not connected to Redis server. Cannot subscribe to channel.");
-            return;
+            return null;
         }
+
+        final JedisPubSub jedisPubSub = new JedisPubSub() {
+            @Override
+            public void onMessage(String ch, String message) {
+                messageListener.onMessage(ch, message);
+            }
+        };
+
+        final Subscription subscription = new Subscription(jedisPubSub, channel);
 
         new Thread(() -> {
             try (Jedis jedis = jedisPool.getResource()) {
-                jedis.subscribe(new JedisPubSub() {
-                    @Override
-                    public void onMessage(String channel, String message) {
-                        messageListener.onMessage(channel, message);
-                    }
-                }, channel);
+                Log.info("Subscribing to channel: " + channel);
+                jedis.subscribe(jedisPubSub, channel);
+                Log.info("Unsubscribed from channel: " + channel);
             } catch (JedisConnectionException e) {
-                Log.error("Jedis connection error during SUBSCRIBE operation", e);
+                Log.error("Jedis connection error during SUBSCRIBE operation on channel " + channel, e);
                 connected = false;
             } catch (Exception e) {
-                Log.error("Error subscribing to Redis channel", e);
+                if (e.getMessage().contains("Socket closed") || e.getMessage().contains("Connection reset")) {
+                    Log.info("Subscription for channel " + channel + " was terminated.");
+                } else {
+                    Log.error("Error subscribing to Redis channel " + channel, e);
+                }
             }
         }, "Redis-Subscriber-" + channel).start();
+
+        return subscription;
     }
 
     public Long enqueue(String queueName, String message) {
@@ -584,7 +626,7 @@ public class Redis {
 
     public void registerReliableQueueConsumer(String queueName, QueueMessageConsumer consumer) {
         if (useMockFallback) {
-            mockRedis.registerQueueConsumer(queueName, consumer); // Mock uses simple consumer
+            mockRedis.registerQueueConsumer(queueName, consumer);
             return;
         }
         if (!isConnected()) {
@@ -750,6 +792,7 @@ public class Redis {
             stopServer();
         }
 
+        @Override
         public void publish(String channel, String message) {
             if (!isRunning()) {
                 Log.error("Mock Redis server is not running. Cannot publish message.");
@@ -758,20 +801,32 @@ public class Redis {
 
             List<MessageListener> channelSubscribers = subscribers.get(channel);
             if (channelSubscribers != null) {
-                for (MessageListener listener : channelSubscribers) {
+                for (MessageListener listener : new ArrayList<>(channelSubscribers)) {
                     listener.onMessage(channel, message);
                 }
             }
         }
 
-        public void subscribe(String channel, MessageListener messageListener) {
+        @Override
+        public Subscription subscribe(String channel, MessageListener messageListener) {
             if (!isRunning()) {
                 Log.error("Mock Redis server is not running. Cannot subscribe to channel.");
-                return;
+                return null;
             }
+            subscribers.computeIfAbsent(channel, k -> new CopyOnWriteArrayList<>()).add(messageListener);
+            Log.info("Mock subscribed to channel: " + channel);
+            return new Subscription(messageListener, channel);
+        }
 
-            subscribers.computeIfAbsent(channel, k -> new CopyOnWriteArrayList<>())
-                    .add(messageListener);
+        public void unsubscribe(Subscription subscription) {
+            if (!isRunning() || subscription == null || subscription.getMockListener() == null) return;
+            for (String channel : subscription.getChannels()) {
+                List<MessageListener> listeners = subscribers.get(channel);
+                if (listeners != null) {
+                    listeners.remove(subscription.getMockListener());
+                    Log.info("Mock unsubscribed from channel: " + channel);
+                }
+            }
         }
 
         public Long enqueue(String queueName, String message) {
@@ -779,10 +834,8 @@ public class Redis {
                 Log.error("Mock Redis server is not running. Cannot enqueue message.");
                 return -1L;
             }
-
             List<String> queue = messageQueues.computeIfAbsent(queueName, k -> new CopyOnWriteArrayList<>());
             queue.add(message);
-
             List<QueueMessageConsumer> consumers = queueConsumers.get(queueName);
             if (consumers != null && !consumers.isEmpty()) {
                 QueueMessageConsumer consumer = consumers.get(0);
@@ -799,12 +852,10 @@ public class Redis {
                 Log.error("Mock Redis server is not running. Cannot dequeue message.");
                 return null;
             }
-
             List<String> queue = messageQueues.get(queueName);
             if (queue == null || queue.isEmpty()) {
                 return null;
             }
-
             return queue.remove(0);
         }
 
@@ -813,10 +864,7 @@ public class Redis {
                 Log.error("Mock Redis server is not running. Cannot register queue consumer.");
                 return;
             }
-
-            queueConsumers.computeIfAbsent(queueName, k -> new CopyOnWriteArrayList<>())
-                    .add(consumer);
-
+            queueConsumers.computeIfAbsent(queueName, k -> new CopyOnWriteArrayList<>()).add(consumer);
             List<String> queue = messageQueues.get(queueName);
             if (queue != null && !queue.isEmpty()) {
                 String message = queue.remove(0);
