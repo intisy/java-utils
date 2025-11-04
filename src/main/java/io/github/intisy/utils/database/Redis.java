@@ -9,10 +9,7 @@ import redis.embedded.RedisServer;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.time.Duration;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 @SuppressWarnings("unused")
@@ -521,26 +518,19 @@ public class Redis {
         }, "Redis-Subscriber-" + channel).start();
     }
 
-    public boolean enqueue(String queueName, String message) {
+    public Long enqueue(String queueName, String message) {
         if (useMockFallback) {
             return mockRedis.enqueue(queueName, message);
         }
-
         if (!isConnected()) {
             Log.error("Not connected to Redis server. Cannot enqueue message.");
-            return false;
+            return -1L;
         }
-
         try (Jedis jedis = jedisPool.getResource()) {
-            jedis.rpush(queueName, message);
-            return true;
-        } catch (JedisConnectionException e) {
-            Log.error("Jedis connection error during RPUSH operation", e);
-            connected = false;
-            return false;
+            return jedis.rpush(queueName, message);
         } catch (Exception e) {
-            Log.error("Error enqueueing message to Redis", e);
-            return false;
+            Log.error("Error enqueueing message to Redis queue " + queueName, e);
+            return -1L;
         }
     }
 
@@ -548,18 +538,12 @@ public class Redis {
         if (useMockFallback) {
             return mockRedis.dequeue(queueName);
         }
-
         if (!isConnected()) {
             Log.error("Not connected to Redis server. Cannot dequeue message.");
             return null;
         }
-
         try (Jedis jedis = jedisPool.getResource()) {
             return jedis.lpop(queueName);
-        } catch (JedisConnectionException e) {
-            Log.error("Jedis connection error during LPOP operation", e);
-            connected = false;
-            return null;
         } catch (Exception e) {
             Log.error("Error dequeuing message from Redis", e);
             return null;
@@ -597,6 +581,70 @@ public class Redis {
             }
         }, "Redis-Queue-Consumer-" + queueName).start();
     }
+
+    public void registerReliableQueueConsumer(String queueName, QueueMessageConsumer consumer) {
+        if (useMockFallback) {
+            mockRedis.registerQueueConsumer(queueName, consumer); // Mock uses simple consumer
+            return;
+        }
+        if (!isConnected()) {
+            Log.error("Not connected to Redis. Cannot register queue consumer for " + queueName);
+            return;
+        }
+
+        final String processingQueueName = queueName + ":processing:" + UUID.randomUUID().toString();
+
+        new Thread(() -> {
+            try {
+                while (isConnected()) {
+                    try (Jedis jedis = jedisPool.getResource()) {
+                        String message = jedis.brpoplpush(queueName, processingQueueName, 0);
+
+                        if (message != null) {
+                            try {
+                                consumer.onMessageReceived(queueName, message);
+                                jedis.lrem(processingQueueName, -1, message);
+                            } catch (Exception e) {
+                                Log.error("Worker failed to process message. It remains in " + processingQueueName + " for recovery.", e);
+                            }
+                        }
+                    }
+                }
+            } catch (JedisConnectionException e) {
+                Log.error("Redis connection lost for consumer on queue " + queueName, e);
+                connected = false;
+            } catch (Exception e) {
+                Log.error("Error in reliable queue consumer for " + queueName, e);
+            }
+        }, "Reliable-Queue-Consumer-" + queueName).start();
+    }
+
+    public long getQueueLength(String queueName) {
+        if (useMockFallback) {
+            return mockRedis.getQueueLength(queueName);
+        }
+        if (!isConnected()) return -1;
+        try (Jedis jedis = jedisPool.getResource()) {
+            return jedis.llen(queueName);
+        } catch (Exception e) {
+            Log.error("Error getting queue length for " + queueName, e);
+            return -1;
+        }
+    }
+
+    public Long getPositionInQueue(String queueName, String message) {
+        if (useMockFallback) {
+            return mockRedis.getPositionInQueue(queueName, message);
+        }
+        if (!isConnected()) return null;
+        try (Jedis jedis = jedisPool.getResource()) {
+            return jedis.lpos(queueName, message);
+        } catch (Exception e) {
+            Log.error("Error getting position in queue for " + queueName, e);
+            return null;
+        }
+    }
+
 
     public interface MessageListener {
         void onMessage(String channel, String message);
@@ -723,30 +771,27 @@ public class Redis {
             }
 
             subscribers.computeIfAbsent(channel, k -> new CopyOnWriteArrayList<>())
-                      .add(messageListener);
+                    .add(messageListener);
         }
 
-        public boolean enqueue(String queueName, String message) {
+        public Long enqueue(String queueName, String message) {
             if (!isRunning()) {
                 Log.error("Mock Redis server is not running. Cannot enqueue message.");
-                return false;
+                return -1L;
             }
 
-            messageQueues.computeIfAbsent(queueName, k -> new CopyOnWriteArrayList<>())
-                         .add(message);
+            List<String> queue = messageQueues.computeIfAbsent(queueName, k -> new CopyOnWriteArrayList<>());
+            queue.add(message);
 
             List<QueueMessageConsumer> consumers = queueConsumers.get(queueName);
             if (consumers != null && !consumers.isEmpty()) {
                 QueueMessageConsumer consumer = consumers.get(0);
-
-                List<String> queue = messageQueues.get(queueName);
                 if (!queue.isEmpty()) {
                     String msg = queue.remove(0);
                     new Thread(() -> consumer.onMessageReceived(queueName, msg)).start();
                 }
             }
-
-            return true;
+            return (long) queue.size();
         }
 
         public String dequeue(String queueName) {
@@ -770,13 +815,28 @@ public class Redis {
             }
 
             queueConsumers.computeIfAbsent(queueName, k -> new CopyOnWriteArrayList<>())
-                          .add(consumer);
+                    .add(consumer);
 
             List<String> queue = messageQueues.get(queueName);
             if (queue != null && !queue.isEmpty()) {
                 String message = queue.remove(0);
                 new Thread(() -> consumer.onMessageReceived(queueName, message)).start();
             }
+        }
+
+        @Override
+        public long getQueueLength(String queueName) {
+            if (!isRunning()) return -1;
+            return messageQueues.getOrDefault(queueName, new ArrayList<>()).size();
+        }
+
+        @Override
+        public Long getPositionInQueue(String queueName, String message) {
+            if (!isRunning()) return null;
+            List<String> queue = messageQueues.get(queueName);
+            if (queue == null) return null;
+            long index = queue.indexOf(message);
+            return index == -1 ? null : index;
         }
     }
 
@@ -868,17 +928,17 @@ public class Redis {
 
             Set<String> keys = jedis.keys("*");
             stats.put("string_keys", keys.stream()
-                .filter(k -> jedis.type(k).equals("string"))
-                .count());
+                    .filter(k -> jedis.type(k).equals("string"))
+                    .count());
             stats.put("list_keys", keys.stream()
-                .filter(k -> jedis.type(k).equals("list"))
-                .count());
+                    .filter(k -> jedis.type(k).equals("list"))
+                    .count());
             stats.put("set_keys", keys.stream()
-                .filter(k -> jedis.type(k).equals("set"))
-                .count());
+                    .filter(k -> jedis.type(k).equals("set"))
+                    .count());
             stats.put("hash_keys", keys.stream()
-                .filter(k -> jedis.type(k).equals("hash"))
-                .count());
+                    .filter(k -> jedis.type(k).equals("hash"))
+                    .count());
 
             return stats;
         } catch (Exception e) {
