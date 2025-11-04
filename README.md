@@ -18,7 +18,7 @@ Archives containing JAR files are available as [releases](https://github.com/int
   <dependency>
       <groupId>io.github.intisy</groupId>
       <artifactId>java-utils</artifactId>
-      <version>2.0.5.5</version>
+      <version>2.0.6</version>
   </dependency>
 ```
 
@@ -45,7 +45,7 @@ Archives containing JAR files are available as [releases](https://github.com/int
       }
   }
   dependencies {
-      implementation 'io.github.intisy:java-utils:2.0.5.5'
+      implementation 'io.github.intisy:java-utils:2.0.6'
   }
 ```
 
@@ -57,7 +57,7 @@ Archives containing JAR files are available as [releases](https://github.com/int
       id "io.github.intisy.github-gradle" version "1.3.7"
   }
   dependencies {
-      githubImplementation "intisy:java-utils:2.0.5.5"
+      githubImplementation "intisy:java-utils:2.0.6"
   }
 ```
 
