@@ -138,7 +138,7 @@ public class ThreadUtils {
      * @return the started Thread object
      */
     public static <T> Thread newThread(Supplier<T> supplier) {
-        return newThread(supplier::get);
+        return newThread(supplier, null);
     }
 
     /**
@@ -152,7 +152,7 @@ public class ThreadUtils {
      * @return the started Thread object
      */
     public static <T> Thread newThread(Supplier<T> supplier, String name) {
-        return newThread(supplier::get, name);
+        return newThread(supplier, name, false);
     }
 
     /**
@@ -166,7 +166,9 @@ public class ThreadUtils {
      * @return the started Thread object
      */
     public static <T> Thread newThread(Supplier<T> supplier, String name, boolean daemon) {
-        return newThread(supplier::get, name, daemon);
+        return newThread(() -> {
+            supplier.get();
+        }, name, daemon);
     }
 
     /**
