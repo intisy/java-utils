@@ -38,6 +38,10 @@ repositories {
     mavenCentral()
 }
 
+test {
+    useJUnitPlatform()
+}
+
 java {
     sourceCompatibility = JavaVersion.VERSION_1_8
     targetCompatibility = JavaVersion.VERSION_1_8
@@ -53,4 +57,6 @@ dependencies {
     implementation "org.kohsuke:github-api:1.324"
     implementation "com.github.codemonstur:embedded-redis:1.4.3"
     testImplementation "junit:junit:4.12"
+    // the shared preset runs useJUnitPlatform(), so only jupiter tests are discovered.
+    testImplementation "org.junit.jupiter:junit-jupiter:5.10.1"
 }
