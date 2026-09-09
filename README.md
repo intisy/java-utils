@@ -1,14 +1,14 @@
-# 
+# Java Utils
 
 Archives containing JAR files are available as [releases](https://github.com/intisy/java-utils/releases).
 
 ## What is java-utils?
 
-
+Utils for everything you need about java
 
 ## Usage in private projects
 
- * Maven (inside the  file)
+ * Maven (inside the `pom.xml` file)
 ```xml
   <repository>
       <id>github</id>
@@ -18,11 +18,11 @@ Archives containing JAR files are available as [releases](https://github.com/int
   <dependency>
       <groupId>io.github.intisy</groupId>
       <artifactId>java-utils</artifactId>
-      <version>2.0.7.3</version>
+      <version>2.0.9</version>
   </dependency>
 ```
 
- * Maven (inside the  file)
+ * Maven (inside the `settings.xml` file)
 ```xml
   <servers>
       <server>
@@ -33,7 +33,7 @@ Archives containing JAR files are available as [releases](https://github.com/int
   </servers>
 ```
 
- * Gradle (inside the  or  file)
+ * Gradle (inside the `build.gradle.kts` or `build.gradle` file)
 ```groovy
   repositories {
       maven {
@@ -45,25 +45,21 @@ Archives containing JAR files are available as [releases](https://github.com/int
       }
   }
   dependencies {
-      implementation 'io.github.intisy:java-utils:2.0.7.3'
+      implementation 'io.github.intisy:java-utils:2.0.9'
   }
 ```
 
 ## Usage in public projects
 
- * Gradle (inside the  or  file)
+ * Gradle (inside the `build.gradle.kts` or `build.gradle` file)
 ```groovy
   plugins {
       id "io.github.intisy.github-gradle" version "1.3.7"
   }
   dependencies {
-      githubImplementation "intisy:java-utils:2.0.7.3"
+      githubImplementation "intisy:java-utils:2.0.9"
   }
 ```
-
-Once you have it installed you can use it like so:
-
-
 
 ## License
 
