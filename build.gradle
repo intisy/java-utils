@@ -47,6 +47,19 @@ java {
     targetCompatibility = JavaVersion.VERSION_1_8
 }
 
+/**
+ * The standard doclet does not know apiNote, implSpec or implNote unless they are registered, so
+ * javadoc fails with "unknown tag" on any source that uses them, and only the publish path runs
+ * javadoc.
+ */
+tasks.withType(Javadoc).configureEach {
+    options.tags = [
+            'apiNote:a:API Note:',
+            'implSpec:a:Implementation Requirements:',
+            'implNote:a:Implementation Note:'
+    ]
+}
+
 dependencies {
     implementation "org.slf4j:slf4j-api:1.7.36"
     implementation "ch.qos.logback:logback-classic:1.2.13"
